@@ -39,6 +39,15 @@ class Vector3():
         
         raise ValueError("Can only scalar multiply by float and int, or elementwise multiplication by another Vector3.")
     
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, Vector3):
+            raise ValueError("Can only compare equality between two Vector3 objects.")
+        
+        if (self.x == other.x) and (self.y == other.y) and (self.z == other.z):
+            return True
+            
+        return False
+    
     def __iter__(self):
         """
         Needed as pybullet expects a list for position and velocity
@@ -56,9 +65,26 @@ class Vector3():
         
         return self / magnitude
     
+    @staticmethod
+    def dot(v1, v2) -> float:
+        if not isinstance(v1, Vector3) or not isinstance(v2, Vector3):
+            raise ValueError("Can only take dot product of two Vector3 objects.")
+        
+        return v1.x * v2.x + v1.y * v2.y + v1.z * v2.z
+    
+    @staticmethod
+    def cross(v1, v2):
+        if not isinstance(v1, Vector3) or not isinstance(v2, Vector3):
+            raise ValueError("Can only take cross product of two Vector3 objects.")
+        
+        return Vector3(v1.y * v2.z - v1.z * v2.y,
+                       v1.z * v2.x - v1.x * v2.z,
+                       v1.x * v2.y - v1.y * v2.x)
+    
 
 if __name__ == "__main__":
     a = Vector3(1,2,3)
     b = Vector3(4,5,6)
 
-    print(a / b)
+    print(Vector3.cross(a,b))
+    print(Vector3.dot(a,b))
