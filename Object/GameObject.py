@@ -16,7 +16,7 @@ class GameObject:
     def __del__(self) -> None:
         GameObject.count -= 1
 
-    def move(self, new_position:Vector3=None, new_orientation=None) -> None:
+    def move(self, new_position:Vector3=Vector3(0,0,0), new_orientation=None) -> None:
         """
         Move object to new position and orientation.
         """
@@ -29,7 +29,6 @@ class GameObject:
         self.position = new_position
         self.orientation = new_orientation
 
-        print(new_position)
         p.resetBasePositionAndOrientation(self.body_id, list(new_position), new_orientation)
 
     def get_position(self) -> Vector3:
@@ -38,9 +37,10 @@ class GameObject:
         """
         pos, _ = p.getBasePositionAndOrientation(self.body_id)
         self.position = Vector3(*pos)
+
         return self.position
 
-    def apply_force(self, force:Vector3, rel_pos:Vector3=None):
+    def apply_force(self, force:Vector3, rel_pos:Vector3=Vector3(0,0,0)):
         """
         Apply a force at a relative position.
         """
