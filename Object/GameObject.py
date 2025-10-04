@@ -1,7 +1,7 @@
 import pybullet as p
 from DataType.Vector3 import Vector3
 
-class GameObject:
+class GameObject():
     count = 0
 
     def __init__(self, name, urdf_file, position:Vector3=Vector3(0,0,0), orientation=[0,0,0,1]) -> None:
@@ -16,7 +16,10 @@ class GameObject:
     def __del__(self) -> None:
         GameObject.count -= 1
 
-    def move(self, new_position:Vector3=Vector3(0,0,0), new_orientation=None) -> None:
+    def __repr__(self):
+        return f"<GameObject {self.name} at {self.position}>"
+
+    def setPosition(self, new_position:Vector3=Vector3(0,0,0), new_orientation=None) -> None:
         """
         Move object to new position and orientation.
         """
@@ -31,7 +34,7 @@ class GameObject:
 
         p.resetBasePositionAndOrientation(self.body_id, list(new_position), new_orientation)
 
-    def get_position(self) -> Vector3:
+    def getPosition(self) -> Vector3:
         """
         Returns the current position of the GameObject.
         """
@@ -40,11 +43,10 @@ class GameObject:
 
         return self.position
 
-    def apply_force(self, force:Vector3, rel_pos:Vector3=Vector3(0,0,0)):
+    def applyForce(self, force:Vector3, rel_pos:Vector3=Vector3(0,0,0)):
         """
         Apply a force at a relative position.
         """
         p.applyExternalForce(self.body_id, -1, list(force), list(rel_pos), p.WORLD_FRAME)
 
-    def __repr__(self):
-        return f"<GameObject {self.name} at {self.position}>"
+    
