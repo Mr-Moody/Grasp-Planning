@@ -4,7 +4,7 @@ from DataType.Vector3 import Vector3
 class GameObject():
     count = 0
 
-    def __init__(self, name, urdf_file, position:Vector3=Vector3(0,0,0), orientation=[0,0,0,1]) -> None:
+    def __init__(self, name, urdf_file, position:Vector3=Vector3.zero(), orientation=[0,0,0,1]) -> None:
         self.name = name
         self.urdf_file = urdf_file
         self.position = position
@@ -19,7 +19,7 @@ class GameObject():
     def __repr__(self):
         return f"<GameObject {self.name} at {self.position}>"
 
-    def setPosition(self, new_position:Vector3=Vector3(0,0,0), new_orientation=None) -> None:
+    def setPosition(self, new_position:Vector3=Vector3.zero(), new_orientation=None) -> None:
         """
         Move object to new position and orientation.
         """
@@ -43,7 +43,7 @@ class GameObject():
 
         return self.position
 
-    def applyForce(self, force:Vector3, rel_pos:Vector3=Vector3(0,0,0)):
+    def applyForce(self, force:Vector3, rel_pos:Vector3=Vector3.zero()):
         """
         Apply a force at a relative position.
         """

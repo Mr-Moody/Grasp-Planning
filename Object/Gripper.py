@@ -5,7 +5,7 @@ from Object.Joint import Joint
 from DataType.Vector3 import Vector3
 
 class Gripper(GameObject):
-    def __init__(self, position:Vector3=Vector3(0,0,0), orientation:list=[0,0,0,1]) -> None:
+    def __init__(self, position:Vector3=Vector3.zero(), orientation:list=[0,0,0,1]) -> None:
         # Initialise GameObject for Gripper
         super().__init__(name="Gripper", 
                          urdf_file="pr2_gripper.urdf", 

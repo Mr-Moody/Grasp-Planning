@@ -30,6 +30,9 @@ class Vector3():
         
         raise ValueError("Can only scalar multiply by float and int, or elementwise multiplication by another Vector3.")
     
+    def __rmul__(self, other):
+        return self.__mul__(other)
+    
     def __truediv__(self, other):
         if isinstance(other, (float, int)):
             return Vector3(self.x / other, self.y / other, self.z / other)
@@ -81,6 +84,10 @@ class Vector3():
                        v1.z * v2.x - v1.x * v2.z,
                        v1.x * v2.y - v1.y * v2.x)
     
+    @staticmethod
+    def zero():
+        return Vector3(0,0,0)
+    
 
 if __name__ == "__main__":
     a = Vector3(1,2,3)
@@ -88,3 +95,5 @@ if __name__ == "__main__":
 
     print(Vector3.cross(a,b))
     print(Vector3.dot(a,b))
+
+    print(a+b)
