@@ -37,16 +37,45 @@ if __name__ == "__main__":
     # Create floor plane
     plane_id = p.loadURDF("plane.urdf")
 
+    # Spawn gripper and object
     gripper = Gripper(position=Vector3(0, 0, 0.1))
+    object = GameObject(name="cube", urdf_file="cube_small.urdf", position=Vector3(0, 0, 0)) #Object at origin for ease
 
     s = FibonacciSphere(samples=1000, radius=0.5, cone_angle=2*math.pi/3)
     [drawGizmo(v) for v in s.vertices]
- 
-    gripper.close()
+
+    gripper.close() # Assume has found object and has approached it correctly
     pause(2)
 
-    gripper.open()
-    pause(2)
+    # Move gripper directly upwards for 10 seconds and see if object is slipping
+    pre_obj_pos = object.getPosition()
+    pre_grip_pos = gripper.getPosition()
+
+    isSlipping = False
+
+    for i in range(NUM_TICKS):
+        gripper.setPosition(new_position=Vector3(0, 0, 0.1 + (i * (0.5 / NUM_TICKS))))
+        p.stepSimulation()
+        time.sleep(TICK_RATE)
+
+        # Determine slipping by calculating and comparing acceleration of object and gripper
+        obj_vec = object.getPosition() - pre_obj_pos
+        grip_vec = gripper.getPosition() - pre_grip_pos
+
+        obj_acc = obj_vec / (TICK_RATE ** 2)
+        grip_acc = grip_vec / (TICK_RATE ** 2)
+
+        # Comparing the dot product of the two accelerations to see if they are in the same direction
+        if Vector3.dot(obj_acc, grip_acc) < 0.9 * grip_acc.length():
+            isSlipping = True
+            break
+        else:
+            pre_obj_pos = object.getPosition()
+            pre_grip_pos = gripper.getPosition()
+            isSlipping = False
+
+    # gripper.open()
+    # pause(2)
 
     # Keep simulation open before closing
     pause(100)
