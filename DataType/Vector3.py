@@ -9,6 +9,9 @@ class Vector3():
     def __str__(self) -> str:
         return f"({self.x}, {self.y}, {self.z})"
     
+    def __repr__(self) -> str:
+        return f"Vector3({self.x}, {self.y}, {self.z})"
+    
     def __add__(self, other):
         if not isinstance(other, Vector3):
             raise ValueError("Can only add Vector3 with other Vector3")

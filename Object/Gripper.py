@@ -19,7 +19,8 @@ class Gripper(GameObject):
                                                      jointType=p.JOINT_FIXED,
                                                      jointAxis=[0, 0, 0],
                                                      parentFramePosition=[0.2, 0, 0],
-                                                     childFramePosition=[0.5, 0.3, 0.7])
+                                                     childFramePosition=list(self.position),
+                                                     childFrameOrientation=self.orientation)
         
         joint_positions = [0.550569, 0.0, 0.549657, 0.0]
 

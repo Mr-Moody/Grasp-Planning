@@ -7,6 +7,8 @@ import math
 from DataType.Vector3 import Vector3
 from Object.GameObject import GameObject
 from Object.Gripper import Gripper
+from Planning.sphere import FibonacciSphere
+from util import drawGizmo
 
 TIME = 10 #seconds
 TICK_RATE = 1./240.
@@ -30,12 +32,15 @@ if __name__ == "__main__":
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
     p.resetSimulation()
     p.setRealTimeSimulation(0)
-    p.setGravity(0, 0, -10)
+    p.setGravity(0, 0, -9.81)
 
-    # Create a floor
+    # Create floor plane
     plane_id = p.loadURDF("plane.urdf")
 
     gripper = Gripper(position=Vector3(0, 0, 0.1))
+
+    s = FibonacciSphere(samples=1000, radius=0.5, cone_angle=2*math.pi/3)
+    [drawGizmo(v) for v in s.vertices]
  
     gripper.close()
     pause(2)
@@ -43,9 +48,7 @@ if __name__ == "__main__":
     gripper.open()
     pause(2)
 
-    # Keep simulation open for 10 before closing
-    pause(10)
+    # Keep simulation open before closing
+    pause(100)
 
     p.disconnect()
-
-#Test Commit
