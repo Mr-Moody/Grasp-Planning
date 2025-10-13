@@ -1,9 +1,8 @@
 import math
-
-from DataType.Vector3 import Vector3
+import numpy as np
 
 class FibonacciSphere():
-    def __init__(self, samples:int=100, radius:float=1.0, cone_angle:float=-2*math.pi, cone_origin:Vector3=Vector3(0,0,1)) -> None:
+    def __init__(self, samples:int=100, radius:float=1.0, cone_angle:float=-2*math.pi, cone_origin:np.ndarray=np.array([0,0,1])) -> None:
         """
         Generate points on a sphere using the Fibonacci method.
         Args:
@@ -23,7 +22,7 @@ class FibonacciSphere():
         points = []
         phi = math.pi * (3 - math.sqrt(5))  # golden angle in radians
 
-        up = self.cone_origin.normalise()
+        up = self.cone_origin / np.linalg.norm(self.cone_origin)
         angle_limit = math.cos(self.cone_angle / 2)
 
         for i in range(self.samples):
@@ -35,9 +34,11 @@ class FibonacciSphere():
             x = math.cos(theta) * radius
             z = math.sin(theta) * radius
 
-            v = Vector3(x, y, z).normalise()
+            v = np.array([x, y, z])
 
-            dp = Vector3.dot(v, up)
+            v = v / np.linalg.norm(v)
+
+            dp = np.dot(v, up)
 
             if dp >= angle_limit:
                 points.append(v * self.radius)
