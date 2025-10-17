@@ -1,12 +1,12 @@
 import pybullet as p
 import pybullet_data
 import time
-import random
 import math
 import numpy as np
 
 from Object.GameObject import GameObject
-from Object.Gripper import Gripper
+from Object.TwoFingerGripper import TwoFingerGripper
+from Object.ThreeFingerGripper import ThreeFingerGripper
 from Planning.sphere import FibonacciSphere
 from util import drawGizmo
 
@@ -42,7 +42,7 @@ if __name__ == "__main__":
     orientation = p.getQuaternionFromEuler(v)
 
     # Spawn gripper and object
-    gripper = Gripper(position=np.array([0, 0, 0.5]), orientation=orientation)
+    gripper = TwoFingerGripper(position=np.array([0, 0, 0.5]), orientation=orientation)
     object = GameObject(name="cube", urdf_file="cube_small.urdf", position=np.array([0, 0, 0])) #Object at origin for ease
 
     s = FibonacciSphere(samples=50, radius=0.4, cone_angle=math.pi)

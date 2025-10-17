@@ -1,18 +1,18 @@
 import pybullet as p
-import math
 import numpy as np
 from scipy.spatial.transform import Rotation as R
+from abc import ABC, abstractmethod
 
 from Object.GameObject import GameObject
 from Object.Joint import Joint
 
 FINGER_JOINTS = [0,2]
 
-class Gripper(GameObject):
-    def __init__(self, position:np.ndarray=np.array([0,0,0]), orientation:np.ndarray=np.array([0,0,0,1])) -> None:
+class Gripper(GameObject, ABC):
+    def __init__(self, name:str="Gripper", urdf_file:str="pr2_gripper.urdf", position:np.ndarray=np.array([0,0,0]), orientation:np.ndarray=np.array([0,0,0,1]), joint_positions:list[float]=[]) -> None:
         # Initialise GameObject for Gripper
-        super().__init__(name="Gripper", 
-                         urdf_file="pr2_gripper.urdf", 
+        super().__init__(name=name, 
+                         urdf_file=urdf_file, 
                          position=position, 
                          orientation=orientation)
         
@@ -25,17 +25,16 @@ class Gripper(GameObject):
                                                      parentFramePosition=[0.2, 0, 0],
                                                      childFramePosition=[0, 0, 0])
         
-        joint_positions = [0.550569, 0.0, 0.549657, 0.0]
+        if len(joint_positions) > 0:
+            self.joints = [Joint(self.body_id,i,pos) for i,pos in enumerate(joint_positions)]
 
-        self.joints = [Joint(self.body_id,i,pos) for i,pos in enumerate(joint_positions)]
-
+    @abstractmethod
     def open(self) -> None:
-        self.joints[0].move(0.5)
-        self.joints[2].move(0.5)
+        raise NotImplementedError(f"open() method not implemented for {type(self).__name__}.")
 
+    @abstractmethod
     def close(self) -> None:
-        self.joints[0].move(0)
-        self.joints[2].move(0)
+        raise NotImplementedError(f"close() method not implemented for {type(self).__name__}.")
 
     def orientationToTarget(self, target:np.ndarray=np.array([0,0,0])) -> np.ndarray:
         """
