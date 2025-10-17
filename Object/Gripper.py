@@ -42,7 +42,7 @@ class Gripper(GameObject):
         Compute quaternion for gripper to face location from current position.
         """
 
-        direction = target - self.position
+        direction = target - self.getPosition()
         
         if np.linalg.norm(direction) < 0.0001:  # If too close to target
             return np.array([0, 0, 0, 1])  # Identity quaternion
