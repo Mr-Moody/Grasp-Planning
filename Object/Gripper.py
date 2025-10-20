@@ -22,7 +22,7 @@ class Gripper(GameObject, ABC):
                                                      childLinkIndex=-1,
                                                      jointType=p.JOINT_FIXED,
                                                      jointAxis=[0, 0, 0],
-                                                     parentFramePosition=[0.2, 0, 0],
+                                                     parentFramePosition=[0, 0, 0],
                                                      childFramePosition=[0, 0, 0])
         
         if len(joint_positions) > 0:
@@ -43,29 +43,40 @@ class Gripper(GameObject, ABC):
 
         direction = target - self.getPosition()
         
-        if np.linalg.norm(direction) < 0.0001:  # If too close to target
-            return np.array([0, 0, 0, 1])  # Identity quaternion
+        norm_x = np.linalg.norm(direction)
+        
+        if norm_x < 1e-6:
+            return R.identity().as_quat()
+        
+        new_x = direction / norm_x
+        
+        
+        world_up = np.array([0, 0, 1]) 
+
+        new_y = np.cross(world_up, new_x)
+
+        if np.linalg.norm(new_y) < 1e-6:
+            # if looking up/down manually set new x to the world X
+            new_y = np.cross(new_x, [0,1,0])
             
-        # normalised forward vector
-        x_axis = direction / np.linalg.norm(direction)
+        new_y = new_y / np.linalg.norm(new_y)
         
-        world_z = np.array([0.0, 0.0, 1.0]) 
-        
-        y_axis_temp = np.cross(x_axis, world_z)
-        
-        if np.linalg.norm(y_axis_temp) < 0.0001:
-            # If parallel define a new World_Z
-            world_y = np.array([0.0, 1.0, 0.0])
-            y_axis_temp = np.cross(x_axis, world_y)
-            
-        y_axis = y_axis_temp / np.linalg.norm(y_axis_temp)
+        new_z = np.cross(new_x, new_y)
 
-        z_axis = np.cross(y_axis, x_axis)
-
-        rotation_matrix = np.stack([x_axis, y_axis, z_axis], axis=1)
-
-        r = R.from_matrix(rotation_matrix)
+        rotation_matrix = np.column_stack((new_x, new_y, new_z))
+        rotation = R.from_matrix(rotation_matrix)
         
-        quaternion = r.as_quat(False) 
+        quaternion_xyzw = rotation.as_quat()
         
-        return np.array(quaternion.tolist())
+        return quaternion_xyzw
+    
+    def debugDrawOrientation(self, target):
+        quaternion = self.orientationToTarget(target)
+        position = self.getPosition()
+        rotation = R.from_quat(quaternion)
+        axes = rotation.as_matrix()
+
+        # Draw lines for x,y,z axes (red,green,blue)
+        p.addUserDebugLine(position, position + 0.1 * axes[:,0], [1,0,0], 2)
+        p.addUserDebugLine(position, position + 0.1 * axes[:,1], [0,1,0], 2)
+        p.addUserDebugLine(position, position + 0.1 * axes[:,2], [0,0,1], 2)

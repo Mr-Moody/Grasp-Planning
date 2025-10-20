@@ -37,30 +37,29 @@ if __name__ == "__main__":
     # Create floor plane
     plane_id = p.loadURDF("plane.urdf")
 
-    #v_down = Vector3(0, 1 * math.pi / 2, 0) # Pointing downwards
     v = np.array([0,0,1])
     orientation = p.getQuaternionFromEuler(v)
 
     # Spawn gripper and object
-    gripper = TwoFingerGripper(position=np.array([0, 0, 0.5]), orientation=orientation)
-    object = GameObject(name="cube", urdf_file="cube_small.urdf", position=np.array([0, 0, 0])) #Object at origin for ease
+    gripper = TwoFingerGripper(position=np.array([0, 0, 1]), orientation=orientation)
+    p.stepSimulation()
+    object = GameObject(name="cube", urdf_file="cube_small.urdf", position=np.array([0, 0, 0.05]))
 
     s = FibonacciSphere(samples=50, radius=0.4, cone_angle=math.pi)
     [drawGizmo(v) for v in s.vertices]
 
-    pause(2)
+    p.stepSimulation()
 
-    #gripper.close() # Assume has found object and has approached it correctly
-    #pause(2)
 
     # Move gripper directly upwards for 10 seconds and see if object is slipping
     pre_obj_pos = object.getPosition()
     pre_grip_pos = gripper.getPosition()
 
     for v in s.vertices:
-        orientation = gripper.orientationToTarget(target=np.array([0,0,0]))
+        orientation = gripper.orientationToTarget(target=pre_obj_pos)
         gripper.setPosition(new_position=v, new_orientation=orientation)
-        p.addUserDebugLine(v, [0,0,0], [1,0,0])
+        #p.addUserDebugLine(v, [0,0,0], [1,0,0])
+        gripper.debugDrawOrientation(pre_obj_pos)
         p.stepSimulation()
         time.sleep(1)
 
