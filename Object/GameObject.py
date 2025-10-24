@@ -1,5 +1,6 @@
 import pybullet as p
 import numpy as np
+import time
 
 class GameObject():
     count = 0
@@ -47,6 +48,9 @@ class GameObject():
         """
         self.__body_id = p.loadURDF(self.__urdf_file, list(self.__position), list(self.__orientation))
 
+        # Add Friction
+        p.changeDynamics(self.body_id, -1, lateralFriction=2.0, rollingFriction=0.1, spinningFriction=0.1)
+
     def unload(self) -> None:
         """
         Remove the GameObject from the simulation.
@@ -70,19 +74,54 @@ class GameObject():
 
         p.resetBasePositionAndOrientation(self.__body_id, new_position, new_orientation)
 
+    def getPositionAndOrtientation(self) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Returns the current position and orientation of the GameObject.
+        """
+        position, orientation = p.getBasePositionAndOrientation(self.__body_id)
+        self.__position = np.array(position)
+        self.__orientation = np.array(orientation)
+
+        return self.__position, self.__orientation
+
     def getPosition(self) -> np.ndarray:
         """
         Returns the current position of the GameObject.
         """
-        pos, _ = p.getBasePositionAndOrientation(self.__body_id)
-        self.__position = np.array(pos)
+        position, _ = self.getPositionAndOrtientation()
 
-        return self.__position
+        return position
+    
+    def getOrientation(self) -> np.ndarray:
+        """
+        Returns the current orientation of the GameObject.
+        """
+        _, orientation = self.getPositionAndOrtientation()
+
+        return orientation
 
     def applyForce(self, force:np.ndarray, rel_pos:np.ndarray=np.array([0,0,0])) -> None:
         """
         Apply a force at a relative position.
         """
         p.applyExternalForce(self.__body_id, -1, force, rel_pos, p.WORLD_FRAME)
+
+    def moveToPosition(self, target_position:np.ndarray, target_orientation:np.ndarray=None, duration:float=1.0, steps:int=240) -> None:
+        """
+        Move the object to a target position and orientation over a specified duration.
+        """
+        position, orientation = self.getPositionAndOrtientation()
+
+        if target_orientation is None:
+            target_orientation = orientation
+
+        for step in range(steps):
+            t = (step + 1) / steps
+            new_position = position * (1 - t) + target_position * t
+            new_orientation = orientation * (1 - t) + target_orientation * t  # Simple linear interpolation for orientation
+
+            self.setPosition(new_position=new_position, new_orientation=new_orientation)
+            p.stepSimulation()
+            time.sleep(duration / steps)
 
     

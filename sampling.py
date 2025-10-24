@@ -26,12 +26,6 @@ if __name__ == "__main__":
 
     p.stepSimulation()
 
-    # gripper.load()
-    # orientation = gripper.orientationToTarget(target=target)
-    # gripper.setPosition(new_position=start, new_orientation=orientation)
-    # gripper.debugDrawOrientation(target)
-    # p.stepSimulation()
-
     for v in s.vertices:
         
         gripper.load()
@@ -47,10 +41,26 @@ if __name__ == "__main__":
         gripper.setPosition(new_position=v, new_orientation=orientation)
 
         #visualise axes
-        gripper.debugDrawOrientation(target_position)
+        #gripper.debugDrawOrientation(target_position)
 
         p.stepSimulation()
         time.sleep(1)
+
+        direction = target_position - v
+
+        distance = np.linalg.norm(direction)
+        direction = direction / distance
+
+        gripper.moveToPosition(target_position=(target_position - 0.29*direction), target_orientation=orientation, duration=0.5, steps=50)
+
+        gripper.close()
+        p.stepSimulation()
+        pause(2)
+
+        position = gripper.getPosition()
+        position[2] += 0.3
+
+        gripper.moveToPosition(position, duration=2, steps=50)
 
         gripper.unload()
         object.unload()
