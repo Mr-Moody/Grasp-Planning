@@ -1,6 +1,8 @@
+import pybullet as p
 import numpy as np
 
 from Object.Gripper import Gripper
+from Object.Joint import Joint
 
 class TwoFingerGripper(Gripper):
     def __init__(self, position:np.ndarray=np.array([0,0,0]), orientation:np.ndarray=np.array([0,0,0,1])) -> None:
@@ -10,6 +12,16 @@ class TwoFingerGripper(Gripper):
                          position=position, 
                          orientation=orientation,
                          joint_positions=[0.550569, 0.0, 0.549657, 0.0])
+        
+    def load(self):
+        """
+        Load the Gripper into the simulation.
+        """
+        super().load()
+
+        p.changeConstraint(self.gripper_constraint,
+                           jointChildFrameOrientation=p.getQuaternionFromEuler([0, np.pi/2, 0]))
+
 
     def open(self) -> None:
         self.joints[0].move(0.5)

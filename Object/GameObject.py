@@ -10,7 +10,7 @@ class GameObject():
         self.__urdf_file = urdf_file
         self.__position = position
         self.__orientation = orientation
-        self.__body_id = p.loadURDF(self.__urdf_file, list(self.__position), self.__orientation)
+        self.__body_id = None
 
         GameObject.count += 1
 
@@ -40,6 +40,20 @@ class GameObject():
     @property
     def body_id(self):
         return self.__body_id
+    
+    def load(self) -> None:
+        """
+        Load the GameObject into the simulation.
+        """
+        self.__body_id = p.loadURDF(self.__urdf_file, list(self.__position), list(self.__orientation))
+
+    def unload(self) -> None:
+        """
+        Remove the GameObject from the simulation.
+        """
+        if self.__body_id is not None:
+            p.removeBody(self.__body_id)
+            self.__body_id = None
 
     def setPosition(self, new_position:np.ndarray=np.array([0,0,0]), new_orientation:np.ndarray=np.array([0,0,0,1])) -> None:
         """

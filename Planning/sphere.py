@@ -1,6 +1,8 @@
 import math
 import numpy as np
 
+from util import drawGizmo
+
 class FibonacciSphere():
     def __init__(self, samples:int=100, radius:float=1.0, cone_angle:float=-2*math.pi, cone_origin:np.ndarray=np.array([0,0,1])) -> None:
         """
@@ -45,3 +47,6 @@ class FibonacciSphere():
 
         return points
     
+    def visualise(self):
+        for v in self.vertices:
+            drawGizmo(v)

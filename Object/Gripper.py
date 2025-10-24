@@ -16,6 +16,14 @@ class Gripper(GameObject, ABC):
                          position=position, 
                          orientation=orientation)
         
+        self.joint_positions = joint_positions
+
+    def load(self) -> None:
+        """
+        Load the Gripper into the simulation.
+        """
+        super().load()
+        
         self.gripper_constraint = p.createConstraint(parentBodyUniqueId=self.body_id,
                                                      parentLinkIndex=-1,
                                                      childBodyUniqueId=-1,
@@ -25,8 +33,8 @@ class Gripper(GameObject, ABC):
                                                      parentFramePosition=[0, 0, 0],
                                                      childFramePosition=[0, 0, 0])
         
-        if len(joint_positions) > 0:
-            self.joints = [Joint(self.body_id,i,pos) for i,pos in enumerate(joint_positions)]
+        if len(self.joint_positions) > 0:
+            self.joints = [Joint(self.body_id,i,pos) for i,pos in enumerate(self.joint_positions)]
 
     @abstractmethod
     def open(self) -> None:
@@ -35,6 +43,24 @@ class Gripper(GameObject, ABC):
     @abstractmethod
     def close(self) -> None:
         raise NotImplementedError(f"close() method not implemented for {type(self).__name__}.")
+    
+    def setPosition(self, new_position:np.ndarray=np.array([0,0,0]), new_orientation:np.ndarray=np.array([0,0,0,1])) -> None:
+        """
+        Move gripper to new position and orientation.
+        """
+        if new_position is None:
+            new_position = self.position
+
+        if new_orientation is None:
+            new_orientation = self.orientation
+
+        super().setPosition(new_position, new_orientation)
+
+        p.changeConstraint(self.gripper_constraint,
+                            new_position,
+                            new_orientation,
+                            500)
+        
 
     def orientationToTarget(self, target:np.ndarray=np.array([0,0,0])) -> np.ndarray:
         """
@@ -64,9 +90,10 @@ class Gripper(GameObject, ABC):
         new_z = np.cross(new_x, new_y)
 
         rotation_matrix = np.column_stack((new_x, new_y, new_z))
+
         rotation = R.from_matrix(rotation_matrix)
         
-        quaternion_xyzw = rotation.as_quat()
+        quaternion_xyzw = rotation.as_quat(True)
         
         return quaternion_xyzw
     

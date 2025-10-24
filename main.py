@@ -8,34 +8,12 @@ from Object.GameObject import GameObject
 from Object.TwoFingerGripper import TwoFingerGripper
 from Object.ThreeFingerGripper import ThreeFingerGripper
 from Planning.sphere import FibonacciSphere
-from util import drawGizmo
+from util import drawGizmo, setupEnvironment, pause
+from constants import TIME, TICK_RATE, NUM_TICKS
 
-TIME = 10 #seconds
-TICK_RATE = 1./240.
-NUM_TICKS = math.ceil(TIME / TICK_RATE)
-
-def pause(wait_time:float):
-    """
-    Run simulation for time seconds.
-    """
-    t0 = time.time()
-    while ((time.time() - t0) < wait_time):
-        p.stepSimulation()
-        time.sleep(TICK_RATE)
 
 if __name__ == "__main__":
-    # Connect to physics server
-    cid = p.connect(p.SHARED_MEMORY)
-    if cid < 0:
-        p.connect(p.GUI)
-
-    p.setAdditionalSearchPath(pybullet_data.getDataPath())
-    p.resetSimulation()
-    p.setRealTimeSimulation(0)
-    p.setGravity(0, 0, -9.81)
-
-    # Create floor plane
-    plane_id = p.loadURDF("plane.urdf")
+    setupEnvironment()
 
     v = np.array([0,0,1])
     orientation = p.getQuaternionFromEuler(v)
@@ -46,10 +24,9 @@ if __name__ == "__main__":
     object = GameObject(name="cube", urdf_file="cube_small.urdf", position=np.array([0, 0, 0.05]))
 
     s = FibonacciSphere(samples=50, radius=0.4, cone_angle=math.pi)
-    [drawGizmo(v) for v in s.vertices]
+    s.visualise()
 
     p.stepSimulation()
-
 
     # Move gripper directly upwards for 10 seconds and see if object is slipping
     pre_obj_pos = object.getPosition()
