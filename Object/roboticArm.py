@@ -1,40 +1,41 @@
 import pybullet as p
 import pybullet_data
 import time
+import numpy as np
 
-# 1. Connect to PyBullet (GUI mode)
-p.connect(p.GUI)
+class RoboticArm():
 
-# 2. Add PyBullet’s data path (for plane.urdf, kuka, etc.)
-p.setAdditionalSearchPath(pybullet_data.getDataPath())
+    def __init__(self, robot_urdf="kuka_iiwa/model.urdf", gripper_class=None, gripper_urdf_position=[0,0,0]):
+        # Load robot file
+        self.robotId = p.loadURDF(robot_urdf, [0.6, 0, 0], useFixedBase=True)
 
-# 3. Load environment
-planeId = p.loadURDF("plane.urdf")
-robotId = p.loadURDF("kuka_iiwa/model.urdf", useFixedBase=True)
+        # Load gripper instance
+        self.gripper = None
+        if gripper_class is not None:
+            self.gripper = gripper_class(position=np.array(gripper_urdf_position))
+            self.gripper.load()
 
-# 4. Set gravity
-p.setGravity(0, 0, -9.8)
-
-# 5. Position the camera
-p.resetDebugVisualizerCamera(
-    cameraDistance=3.5,
-    cameraYaw=50,
-    cameraPitch=-35,
-    cameraTargetPosition=[0, 0, 0]
-)
-
-# 6. Print robot joints info
-num_joints = p.getNumJoints(robotId)
-print("Number of joints:", num_joints)
-for j in range(num_joints):
-    print(p.getJointInfo(robotId, j))
-
-# 7. Add a cube above the plane
-# cubeId = p.loadURDF("cube.urdf", [0.5, 0, 0.5])
-
-# 7. Move one joint (joint #5 in this case)
-target_pos = 1.0  # radians
-p.setJointMotorControl2(robotId,
-                        jointIndex=5,
-                        controlMode=p.POSITION_CONTROL,
-                        targetPosition=target_pos)
+            # Attach gripper to robot
+            self.gripper_constraint = p.createConstraint(parentBodyUniqueId=self.robotId,
+                                                        parentLinkIndex=6,
+                                                        childBodyUniqueId=self.gripper.body_id,
+                                                        childLinkIndex=-1,
+                                                        jointType=p.JOINT_FIXED,
+                                                        jointAxis=[0,0,0],
+                                                        parentFramePosition=[0,0,0],
+                                                        childFramePosition=[0,0,0],
+                                                        parentFrameOrientation=[0,0,0,1],
+                                                        childFrameOrientation=p.getQuaternionFromEuler([0, np.pi/2, 0]))
+            
+    def moveArmToPose(self, endEffectorLinkIndex, targetPos, targetOrn, steps = 100, duration = 1.0):
+        # Moves arm to desired location
+        currentPos, currentOrn = p.getLinkState(self.robotId, endEffectorLinkIndex)[4:6]
+        for step in range(steps):
+            alpha = step / (steps - 1)
+            interpPos = (1-alpha) * np.array(currentPos) + alpha * np.array(targetPos)
+            interpOrn = p.getQuaternionSlerp(currentOrn, targetOrn, alpha)
+            jointPoses = p.calculateInverseKinematics(self.robotId, endEffectorLinkIndex, interpPos.tolist(), list(interpOrn))
+            for i, jointPos in enumerate(jointPoses):
+                p.setJointMotorControl2(self.robotId, i, p.POSITION_CONTROL, jointPos)
+            p.stepSimulation()
+            time.sleep(duration / steps)
