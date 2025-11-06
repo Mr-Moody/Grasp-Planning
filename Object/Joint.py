@@ -1,10 +1,10 @@
 import pybullet as p
 
 class Joint():
-    MAX_VELOCITY = 1
-    MAX_FORCE = 10
+    MAX_VELOCITY = 2
+    MAX_FORCE = 200
 
-    def __init__(self, body_id, index:int, position:float=0, min_limit:float=None, max_limit:float=None):
+    def __init__(self, body_id, index:int, position:float=0, min_limit:float=float("-INF"), max_limit:float=float("INF")):
         self.body_id = body_id
         self.index = index
         self.position = position # position is angle in radians

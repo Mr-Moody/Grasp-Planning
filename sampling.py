@@ -15,7 +15,7 @@ if __name__ == "__main__":
     plane_id = setupEnvironment()
 
     start = np.array([0,0,1])
-    target = np.array([0,0,0.05])
+    target = np.array([0,0,0.025])
 
     # Initialise gripper and object
     gripper = TwoFingerGripper(position=start)
@@ -26,10 +26,13 @@ if __name__ == "__main__":
 
     p.stepSimulation()
 
+    # s.vertices = [np.array([0,0,1]) for _ in range(50)]
+
     for v in s.vertices:
-        
         gripper.load()
         object.load()
+
+        gripper.open()
 
         #update position of gripper
         gripper.setPosition(new_position=v)
@@ -44,23 +47,30 @@ if __name__ == "__main__":
         #gripper.debugDrawOrientation(target_position)
 
         p.stepSimulation()
-        time.sleep(1)
+        pause(0.5)
 
         direction = target_position - v
 
         distance = np.linalg.norm(direction)
         direction = direction / distance
 
-        gripper.moveToPosition(target_position=(target_position - 0.29*direction), target_orientation=orientation, duration=0.5, steps=50)
+        offset = -0.3 * direction
+        
+        gripper.moveToPosition(target_position=(target_position + offset), target_orientation=orientation, duration=0.2, steps=10)
 
         gripper.close()
-        p.stepSimulation()
-        pause(2)
+        # Let gripper close and settle for better contact
+        for i in range(50):
+            gripper.close()
+            p.stepSimulation()
+            time.sleep(TICK_RATE)
+
+        time.sleep(0.2)
 
         position = gripper.getPosition()
-        position[2] += 0.3
+        position[2] += 0.2
 
-        gripper.moveToPosition(position, duration=2, steps=50)
+        gripper.moveToPosition(position, duration=2, steps=40)
 
         gripper.unload()
         object.unload()

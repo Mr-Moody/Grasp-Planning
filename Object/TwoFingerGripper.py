@@ -20,12 +20,17 @@ class TwoFingerGripper(Gripper):
 
         p.changeConstraint(self.gripper_constraint,
                            jointChildFrameOrientation=p.getQuaternionFromEuler([0, np.pi/2, 0]))
+        
+        # Add friction to all links including fingers
+        num_joints = p.getNumJoints(self.body_id)
+        for i in range(-1, num_joints):
+            p.changeDynamics(self.body_id, i, lateralFriction=100.0, rollingFriction=1.0, spinningFriction=1.0)
 
 
     def open(self) -> None:
-        self.joints[0].move(0.5)
-        self.joints[2].move(0.5)
+        self.joints[0].move(1)
+        self.joints[2].move(1)
 
     def close(self) -> None:
-        self.joints[0].move(0.1)
-        self.joints[2].move(0.1)
+        self.joints[0].move(0)
+        self.joints[2].move(0)

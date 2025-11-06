@@ -2,6 +2,7 @@ import pybullet as p
 import pybullet_data
 import numpy as np
 import time
+import os
 
 from constants import TIME, TICK_RATE, NUM_TICKS
 
@@ -12,6 +13,7 @@ def setupEnvironment():
         p.connect(p.GUI)
 
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
+    #p.setAdditionalSearchPath(os.path.join(os.path.dirname(os.path.dirname(__file__)), "Models"))
     p.resetSimulation()
     p.setRealTimeSimulation(0)
     p.setGravity(0, 0, -9.81)

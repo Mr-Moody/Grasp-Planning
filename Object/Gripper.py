@@ -59,7 +59,7 @@ class Gripper(GameObject, ABC):
         p.changeConstraint(self.gripper_constraint,
                             new_position,
                             new_orientation,
-                            500)
+                            maxForce=2000)
         
 
     def orientationToTarget(self, target:np.ndarray=np.array([0,0,0])) -> np.ndarray:

@@ -49,7 +49,7 @@ class GameObject():
         self.__body_id = p.loadURDF(self.__urdf_file, list(self.__position), list(self.__orientation))
 
         # Add Friction
-        p.changeDynamics(self.body_id, -1, lateralFriction=2.0, rollingFriction=0.1, spinningFriction=0.1)
+        p.changeDynamics(self.body_id, -1, lateralFriction=20.0, rollingFriction=0.2, spinningFriction=0.2)
 
     def unload(self) -> None:
         """
