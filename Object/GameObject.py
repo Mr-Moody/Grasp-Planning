@@ -1,6 +1,7 @@
 import pybullet as p
 import numpy as np
 import time
+from scipy.spatial.transform import Rotation as R
 
 class GameObject():
     count = 0
@@ -118,7 +119,11 @@ class GameObject():
         for step in range(steps):
             t = (step + 1) / steps
             new_position = position * (1 - t) + target_position * t
-            new_orientation = orientation * (1 - t) + target_orientation * t  # Simple linear interpolation for orientation
+            # new_orientation = orientation * (1 - t) + target_orientation * t  # Simple linear interpolation for orientation
+            r1 = R.from_quat(orientation)
+            r2 = R.from_quat(target_orientation)
+            slerped_rot = R.slerp(0, 1, [r1, r2])(t)
+            new_orientation = slerped_rot.as_quat()
 
             self.setPosition(new_position=new_position, new_orientation=new_orientation)
             p.stepSimulation()
