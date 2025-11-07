@@ -57,11 +57,21 @@ if __name__ == "__main__":
         offset = -0.3 * direction
         
         gripper.moveToPosition(target_position=(target_position + offset), target_orientation=orientation, duration=0.2, steps=10)
+        
+        # Allow contacts to settle before closing
+        for i in range(20):
+            p.stepSimulation()
+            time.sleep(TICK_RATE)
 
+        # Lock gripper position before closing to prevent movement
+        gripper.lockPosition()
+        
+        # Close slowly and maintain position
         gripper.close()
-        # Let gripper close and settle for better contact
-        for i in range(50):
-            gripper.close()
+        # Let gripper close and settle for better contact - more steps for stability
+        for i in range(150):
+            gripper.close()  # Keep closing command active
+            gripper.lockPosition()  # Continuously lock position to prevent drift
             p.stepSimulation()
             time.sleep(TICK_RATE)
 

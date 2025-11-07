@@ -1,7 +1,8 @@
 import pybullet as p
 import numpy as np
 import time
-from scipy.spatial.transform import Rotation as R
+from typing import Optional
+from scipy.spatial.transform import Rotation as R, Slerp
 
 class GameObject():
     count = 0
@@ -49,8 +50,13 @@ class GameObject():
         """
         self.__body_id = p.loadURDF(self.__urdf_file, list(self.__position), list(self.__orientation))
 
-        # Add Friction
-        p.changeDynamics(self.body_id, -1, lateralFriction=20.0, rollingFriction=0.2, spinningFriction=0.2)
+        # Add Friction and contact properties for better grasping
+        p.changeDynamics(self.body_id, -1, 
+                        lateralFriction=100.0,  # Increased friction to match gripper
+                        rollingFriction=1.0, 
+                        spinningFriction=1.0,
+                        contactStiffness=50000.0,  # Much higher stiffness for better contact
+                        contactDamping=500.0)  # Higher damping to reduce bouncing
 
     def unload(self) -> None:
         """
@@ -107,7 +113,7 @@ class GameObject():
         """
         p.applyExternalForce(self.__body_id, -1, force, rel_pos, p.WORLD_FRAME)
 
-    def moveToPosition(self, target_position:np.ndarray, target_orientation:np.ndarray=None, duration:float=1.0, steps:int=240) -> None:
+    def moveToPosition(self, target_position:np.ndarray, target_orientation:Optional[np.ndarray]=None, duration:float=1.0, steps:int=240) -> None:
         """
         Move the object to a target position and orientation over a specified duration.
         """
@@ -119,11 +125,10 @@ class GameObject():
         for step in range(steps):
             t = (step + 1) / steps
             new_position = position * (1 - t) + target_position * t
-            # new_orientation = orientation * (1 - t) + target_orientation * t  # Simple linear interpolation for orientation
-            r1 = R.from_quat(orientation)
-            r2 = R.from_quat(target_orientation)
-            slerped_rot = R.slerp(0, 1, [r1, r2])(t)
-            new_orientation = slerped_rot.as_quat()
+            # Spherical linear interpolation (slerp) for smooth rotation
+            slerp = Slerp([0, 1], R.from_quat([orientation, target_orientation]))
+            slerped_rot = slerp(t)
+            new_orientation = slerped_rot.as_quat(canonical=True)
 
             self.setPosition(new_position=new_position, new_orientation=new_orientation)
             p.stepSimulation()

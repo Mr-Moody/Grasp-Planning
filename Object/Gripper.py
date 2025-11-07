@@ -44,6 +44,17 @@ class Gripper(GameObject, ABC):
     def close(self) -> None:
         raise NotImplementedError(f"close() method not implemented for {type(self).__name__}.")
     
+    def lockPosition(self) -> None:
+        """
+        Lock the gripper position by updating the constraint with current position.
+        This helps prevent movement during closing.
+        """
+        position, orientation = self.getPositionAndOrtientation()
+        p.changeConstraint(self.gripper_constraint,
+                          position,
+                          orientation,
+                          maxForce=10000)
+    
     def setPosition(self, new_position:np.ndarray=np.array([0,0,0]), new_orientation:np.ndarray=np.array([0,0,0,1])) -> None:
         """
         Move gripper to new position and orientation.
@@ -59,7 +70,7 @@ class Gripper(GameObject, ABC):
         p.changeConstraint(self.gripper_constraint,
                             new_position,
                             new_orientation,
-                            maxForce=2000)
+                            maxForce=10000)  # Much higher force to prevent movement
         
 
     def orientationToTarget(self, target:np.ndarray=np.array([0,0,0])) -> np.ndarray:

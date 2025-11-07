@@ -1,8 +1,8 @@
 import pybullet as p
 
 class Joint():
-    MAX_VELOCITY = 2
-    MAX_FORCE = 200
+    MAX_VELOCITY = 0.5  # Slower velocity for smoother closing and better contact formation
+    MAX_FORCE = 1000  # Increased force for better gripping
 
     def __init__(self, body_id, index:int, position:float=0, min_limit:float=float("-INF"), max_limit:float=float("INF")):
         self.body_id = body_id

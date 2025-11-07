@@ -6,6 +6,7 @@ from Object.Gripper import Gripper
 class TwoFingerGripper(Gripper):
     def __init__(self, position:np.ndarray=np.array([0,0,0]), orientation:np.ndarray=np.array([0,0,0,1])) -> None:
         # Initialise base Gripper class with joint positions for two finger gripper
+        # Use just the filename since Models directory is added to PyBullet search path
         super().__init__(name="Gripper", 
                          urdf_file="pr2_gripper.urdf", 
                          position=position, 
@@ -21,10 +22,15 @@ class TwoFingerGripper(Gripper):
         p.changeConstraint(self.gripper_constraint,
                            jointChildFrameOrientation=p.getQuaternionFromEuler([0, np.pi/2, 0]))
         
-        # Add friction to all links including fingers
+        # Add friction and contact properties to all links including fingers
         num_joints = p.getNumJoints(self.body_id)
         for i in range(-1, num_joints):
-            p.changeDynamics(self.body_id, i, lateralFriction=100.0, rollingFriction=1.0, spinningFriction=1.0)
+            p.changeDynamics(self.body_id, i, 
+                            lateralFriction=100.0, 
+                            rollingFriction=1.0, 
+                            spinningFriction=1.0,
+                            contactStiffness=50000.0,  # Much higher stiffness for better contact
+                            contactDamping=500.0)  # Higher damping to reduce bouncing
 
 
     def open(self) -> None:
