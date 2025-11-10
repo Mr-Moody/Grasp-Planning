@@ -6,8 +6,7 @@ from scipy.spatial.transform import Rotation as R, Slerp
 import math
 
 from Object.GameObject import GameObject
-from Object.Box import Box
-from Object.Cylinder import Cylinder
+from Object.Objects import Box, Cylinder, Duck
 from Planning.Sphere import FibonacciSphere
 
 from constants import TICK_RATE
@@ -74,17 +73,17 @@ class Gripper():
 
             
             p.changeConstraint(
-            self.constraint_id,
-            jointChildPivot=position,
-            jointChildFrameOrientation=orientation,
-            maxForce=50)
+                self.constraint_id,
+                jointChildPivot=new_position,
+                jointChildFrameOrientation=new_orientation,
+                maxForce=50)
 
             p.stepSimulation()
             time.sleep(duration / steps)
         
         
     
-    def setPosition(self, new_position:np.ndarray=np.array([0,0,0]), new_orientation:np.ndarray=np.array([0,0,0,1])) -> None:
+    def setPosition(self, new_position:np.ndarray=None, new_orientation:np.ndarray=None) -> None:
         """
         Move object to new position and orientation.
         """
@@ -194,7 +193,7 @@ class TwoFingerGripper(Gripper):
         """Open the gripper fingers."""
         for joint in self.JOINTS:
             p.setJointMotorControl2(self.id, joint, p.POSITION_CONTROL,
-                                    targetPosition=0.0, maxVelocity=2, force=300)
+                                    targetPosition=0.5, maxVelocity=2, force=300)
 
     def close(self):
         """Close the gripper fingers."""
@@ -216,116 +215,77 @@ class TwoFingerGripper(Gripper):
 
         target = object.getPosition()
         orientation = self.orientationToTarget(target)
+        self.setPosition(new_orientation=orientation)
+        p.stepSimulation()
 
-        # --- Move above object by calling the move function inherited from the parent
-        self.moveToPosition(target, orientation, duration=0.3, steps=20)
-        for _ in range(100):
-            p.stepSimulation()
-            time.sleep(TICK_RATE)
-
-        # --- Lower onto object ---
-        self.moveToPosition(target, orientation, duration=0.2, steps=10)
-        print("\033[93mmove to the grasp height")
-        for _ in range(100):
-            p.stepSimulation()
-            time.sleep(TICK_RATE)
+        # Move towards object
+        self.moveToPosition(target + object.grasp_offset, duration=1, steps=50)
+        pause(1)
         
+        
+        # Close gripper
+        self.close()
+        pause(2)
 
-        for _ in range(100):
-            self.close()
-            p.stepSimulation()
-            time.sleep(TICK_RATE)
 
-
-        position, orientation = self.getPositionAndOrientation()
-        lift_target = position + np.array([0,0,0.2])
+        position, target_orientation = self.getPositionAndOrientation()
+        target_position = position + np.array([0,0,0.05])
+        duration = 3
         steps = 100
 
-        self.moveToPosition(target_position=position, target_orientation=orientation, duration=1, steps=100)
+        # Lift object
+        for step in range(steps):
+            position, orientation = self.getPositionAndOrientation()
+            
+            t = (step + 1) / steps
+            new_position = position * (1 - t) + target_position * t
+            # Spherical linear interpolation (slerp) for smooth rotation
+            slerp = Slerp([0, 1], R.from_quat([orientation, target_orientation]))
+            slerped_rot = slerp(t)
+            new_orientation = slerped_rot.as_quat(canonical=True)
+
+            
+            p.changeConstraint(
+                self.constraint_id,
+                jointChildPivot=new_position,
+                jointChildFrameOrientation=new_orientation,
+                maxForce=20)
+
+            p.stepSimulation()
+            time.sleep(duration / steps)
 
 
 
 #---------- Main Simulation ----------
 if __name__ == "__main__":
-    setupEnvironment()
-
-    gripper_start = np.array([0,0,1])
-    object_start = np.array([0,0,0.07])
-
-    gripper = TwoFingerGripper(position=gripper_start)
-    object = Box(position=object_start)
- 
-    s = FibonacciSphere(samples=50, radius=0.6, cone_angle=math.pi)
-    s.visualise()
-
-    p.stepSimulation()
-
-    #s.vertices = [np.array([0,0,1]) for _ in range(50)]
-
-    for v in s.vertices:
-        object.load()
-        gripper.load()
-
-        gripper.setPosition(new_position=v)
-        pause(0.2)
-
-        # Grasp and lift the box
-        gripper.graspObject(object)
-
-        # Keep GUI open briefly
-        for _ in range(100):
-            p.stepSimulation()
-            time.sleep(1./240.)
-        print(f"\033[91mdone grasping: {object.name}")
-
-        gripper.unload()
-        object.unload()
-
-        # short pause before loading next one
-        time.sleep(0.5)
-
-    p.disconnect()
-
-
-
-# ---------- Environment Setup ----------
-def setup_environment():
-    p.connect(p.GUI)
-    p.setAdditionalSearchPath(pybullet_data.getDataPath())
-    p.resetSimulation()
-    p.setGravity(0, 0, -10)
-    p.setRealTimeSimulation(0)
-    plane_id = p.loadURDF("plane.urdf")
-    return plane_id
-
-
-# ---------- Main Simulation ----------
-if __name__ == "__main__":
     plane_id = setupEnvironment()
 
     gripper_start = np.array([0,0,1])
-    box_start = np.array([0,0,0.03])
-
-    # Initialise gripper and object
-    gripper = TwoFingerGripper(position=gripper_start)
-    object = Box(position=box_start)
+    object_start = np.array([0,0,0.03])
 
     s = FibonacciSphere(samples=50, radius=0.6, cone_angle=math.pi)
     s.visualise()
-
     p.stepSimulation()
 
     #s.vertices = [np.array([0,0,1]) for _ in range(50)]
 
     for v in s.vertices:
+        # Initialise gripper and object
+        gripper = TwoFingerGripper(position=v)
+        object = Box(position=object_start)
+        
         gripper.load()
         object.load()
-
+        p.stepSimulation()
+        
+        target = object.getPosition()
+        orientation = gripper.orientationToTarget(target)
+        gripper.setPosition(new_position=v, new_orientation=orientation)
+        p.stepSimulation()
+        
         gripper.open()
+        p.stepSimulation()
 
-        #update position of gripper
-        gripper.setPosition(new_position=v)
-        pause(0.2)
 
         gripper.graspObject(object)
 

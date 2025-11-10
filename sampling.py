@@ -5,7 +5,7 @@ import math
 import numpy as np
 
 from Object.TwoFingerGripper import TwoFingerGripper
-from Object.Box import Box
+from Object.Objects import Box
 from Planning.Sphere import FibonacciSphere
 from util import drawGizmo, setupEnvironment, pause
 from constants import TIME, TICK_RATE, NUM_TICKS
