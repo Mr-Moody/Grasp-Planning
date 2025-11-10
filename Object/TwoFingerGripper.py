@@ -31,28 +31,28 @@ class TwoFingerGripper(Gripper):
                            jointChildFrameOrientation=p.getQuaternionFromEuler([0, np.pi/2, 0]))
 
 
-        p.changeDynamics(self.body_id, -1, lateralFriction=2.0, rollingFriction=0.1, spinningFriction=0.1)
+        p.changeDynamics(self.id, -1, lateralFriction=2.0, rollingFriction=0.1, spinningFriction=0.1)
 
 
         for i, pos in enumerate(self.INITIAL_POSITIONS):
-            p.resetJointState(self.body_id, i, pos)
+            p.resetJointState(self.id, i, pos)
     
 
     def open(self) -> None:
         for joint_idx in self.JOINTS:
-            p.setJointMotorControl2(self.body_id, joint_idx, p.POSITION_CONTROL, targetPosition=0.0, maxVelocity=2, force=300)
+            p.setJointMotorControl2(self.id, joint_idx, p.POSITION_CONTROL, targetPosition=0.5, maxVelocity=2, force=300)
 
     def close(self) -> None:
         for joint_idx in self.JOINTS:
-            p.setJointMotorControl2(self.body_id, joint_idx, p.POSITION_CONTROL, targetPosition=0.1, maxVelocity=2, force=300)
+            p.setJointMotorControl2(self.id, joint_idx, p.POSITION_CONTROL, targetPosition=0.1, maxVelocity=2, force=300)
 
     def graspObject(self, object:GameObject) -> None:
 
         if not isinstance(object, GameObject):
             raise TypeError("Object must be a GameObject")
 
-        p.changeDynamics(object.body_id, -1, lateralFriction=2.0, rollingFriction=0.1, spinningFriction=0.1)
-        p.changeDynamics(self.body_id, -1, lateralFriction=2.0, rollingFriction=0.1, spinningFriction=0.1)
+        p.changeDynamics(object.id, -1, lateralFriction=2.0, rollingFriction=0.1, spinningFriction=0.1)
+        p.changeDynamics(self.id, -1, lateralFriction=2.0, rollingFriction=0.1, spinningFriction=0.1)
 
         target_position = object.getPosition()
         orientation = self.orientationToTarget(target=target_position)
@@ -69,16 +69,17 @@ class TwoFingerGripper(Gripper):
 
         offset = -0.3 * direction + np.array([0,0,0.001])
         
-        self.moveToPosition(target_position=(target_position + offset), target_orientation=orientation, duration=0.2, steps=10)
+        self.moveToPosition(target_position=(target_position + offset), target_orientation=orientation, duration=0.5, steps=20)
         
-        pause(0.5)
 
         # Lock gripper position before closing to prevent movement
         self.lockPosition()
-        
-        for i in range(100):
+
+        for _ in range(100):
             self.close()
-            pause(0.01)
+            p.stepSimulation()
+            time.sleep(TICK_RATE)
+
 
         start_pos = self.getPosition()
         lift_target = np.array(start_pos)

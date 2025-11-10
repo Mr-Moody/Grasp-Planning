@@ -4,22 +4,21 @@ import time
 import math
 import numpy as np
 
-from Object.GameObject import GameObject
 from Object.TwoFingerGripper import TwoFingerGripper
-from Object.ThreeFingerGripper import ThreeFingerGripper
-from Planning.sphere import FibonacciSphere
+from Object.Box import Box
+from Planning.Sphere import FibonacciSphere
 from util import drawGizmo, setupEnvironment, pause
 from constants import TIME, TICK_RATE, NUM_TICKS
 
 if __name__ == "__main__":
     plane_id = setupEnvironment()
 
-    start = np.array([0,0,1])
-    target = np.array([0,0,0.03])
+    gripper_start = np.array([0,0,1])
+    box_start = np.array([0,0,0.03])
 
     # Initialise gripper and object
-    gripper = TwoFingerGripper(position=start)
-    object = GameObject(name="cube", urdf_file="cube_small.urdf", position=target)
+    gripper = TwoFingerGripper(position=gripper_start)
+    object = Box(position=box_start)
 
     s = FibonacciSphere(samples=50, radius=0.6, cone_angle=math.pi)
     s.visualise()
@@ -32,11 +31,11 @@ if __name__ == "__main__":
         gripper.load()
         object.load()
 
-        gripper.open()
 
         #update position of gripper
         gripper.setPosition(new_position=v)
-        p.stepSimulation()
+        gripper.open()
+        pause(0.2)
 
         gripper.graspObject(object)
 

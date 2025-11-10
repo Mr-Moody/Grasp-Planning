@@ -13,7 +13,7 @@ class GameObject():
         self.__urdf_file = urdf_file
         self.__position = position
         self.__orientation = orientation
-        self.__body_id = None
+        self.__id = None
         self.__constraint_id = None
         
         GameObject.count += 1
@@ -28,6 +28,10 @@ class GameObject():
     @property
     def name(self):
         return self.__name
+
+    @name.setter
+    def name(self, new_name:str):
+        self.__name = new_name
     
     @property
     def urdf_file(self):
@@ -42,14 +46,15 @@ class GameObject():
         return self.__orientation
     
     @property
-    def body_id(self):
-        return self.__body_id
+    def id(self):
+        return self.__id
     
     def load(self) -> None:
         """
         Load the GameObject into the simulation.
         """
-        self.__body_id = p.loadURDF(self.__urdf_file, list(self.__position), list(self.__orientation))
+        self.__id = p.loadURDF(self.__urdf_file, list(self.__position), list(self.__orientation))
+        self.name = f"{self.__name}_{self.__id}"
 
 
     def unload(self) -> None:
@@ -60,9 +65,10 @@ class GameObject():
         if self.__constraint_id is not None:
             p.removeConstraint(self.__constraint_id)
 
-        if self.__body_id is not None:
-            p.removeBody(self.__body_id)
-            self.__body_id = None
+        if self.__id is not None:
+            p.removeBody(self.__id)
+            self.__id = None
+
 
     def setPosition(self, new_position:np.ndarray=np.array([0,0,0]), new_orientation:np.ndarray=np.array([0,0,0,1])) -> None:
         """
@@ -77,13 +83,13 @@ class GameObject():
         self.__position = new_position
         self.__orientation = new_orientation
 
-        p.resetBasePositionAndOrientation(self.__body_id, new_position, new_orientation)
+        p.resetBasePositionAndOrientation(self.__id, new_position, new_orientation)
 
-    def getPositionAndOrtientation(self) -> tuple[np.ndarray, np.ndarray]:
+    def getPositionAndOrientation(self) -> tuple[np.ndarray, np.ndarray]:
         """
         Returns the current position and orientation of the GameObject.
         """
-        position, orientation = p.getBasePositionAndOrientation(self.__body_id)
+        position, orientation = p.getBasePositionAndOrientation(self.__id)
         self.__position = np.array(position)
         self.__orientation = np.array(orientation)
 
@@ -93,7 +99,7 @@ class GameObject():
         """
         Returns the current position of the GameObject.
         """
-        position, _ = self.getPositionAndOrtientation()
+        position, _ = self.getPositionAndOrientation()
 
         return position
     
@@ -101,7 +107,7 @@ class GameObject():
         """
         Returns the current orientation of the GameObject.
         """
-        _, orientation = self.getPositionAndOrtientation()
+        _, orientation = self.getPositionAndOrientation()
 
         return orientation
 
@@ -109,7 +115,7 @@ class GameObject():
         """
         Apply a force at a relative position.
         """
-        p.applyExternalForce(self.__body_id, -1, force, rel_pos, p.WORLD_FRAME)
+        p.applyExternalForce(self.__id, -1, force, rel_pos, p.WORLD_FRAME)
 
     def moveToPosition(self, target_position:np.ndarray, target_orientation:Optional[np.ndarray]=None, duration:float=1.0, steps:int=240) -> None:
         """
