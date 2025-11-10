@@ -4,9 +4,6 @@ from scipy.spatial.transform import Rotation as R
 from abc import ABC, abstractmethod
 
 from Object.GameObject import GameObject
-from Object.Joint import Joint
-
-FINGER_JOINTS = [0,2]
 
 class Gripper(GameObject, ABC):
     def __init__(self, name:str="Gripper", urdf_file:str="pr2_gripper.urdf", position:np.ndarray=np.array([0,0,0]), orientation:np.ndarray=np.array([0,0,0,1]), joint_positions:list[float]=[]) -> None:
@@ -33,8 +30,6 @@ class Gripper(GameObject, ABC):
                                                      parentFramePosition=[0, 0, 0],
                                                      childFramePosition=[0, 0, 0])
         
-        if len(self.joint_positions) > 0:
-            self.joints = [Joint(self.body_id,i,pos) for i,pos in enumerate(self.joint_positions)]
 
     @abstractmethod
     def open(self) -> None:
@@ -53,9 +48,9 @@ class Gripper(GameObject, ABC):
         p.changeConstraint(self.gripper_constraint,
                           position,
                           orientation,
-                          maxForce=10000)
+                          maxForce=50)
     
-    def setPosition(self, new_position:np.ndarray=np.array([0,0,0]), new_orientation:np.ndarray=np.array([0,0,0,1])) -> None:
+    def setPosition(self, new_position:np.ndarray=None, new_orientation:np.ndarray=None) -> None:
         """
         Move gripper to new position and orientation.
         """
@@ -70,7 +65,7 @@ class Gripper(GameObject, ABC):
         p.changeConstraint(self.gripper_constraint,
                             new_position,
                             new_orientation,
-                            maxForce=10000)  # Much higher force to prevent movement
+                            maxForce=50)
         
 
     def orientationToTarget(self, target:np.ndarray=np.array([0,0,0])) -> np.ndarray:

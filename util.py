@@ -18,13 +18,13 @@ def setupEnvironment():
     p.setRealTimeSimulation(0)
     p.setGravity(0, 0, -9.81)
     
-    # Set physics solver parameters for better contact stability
-    p.setPhysicsEngineParameter(
-        numSolverIterations=150,  # More iterations for better contact resolution
-        contactBreakingThreshold=0.00001,  # Much lower threshold for better contact maintenance
-        enableConeFriction=1,  # Enable cone friction for more realistic contacts
-        restitutionVelocityThreshold=0.01  # Lower threshold to reduce bouncing
-    )
+    # # Set physics solver parameters for better contact stability
+    # p.setPhysicsEngineParameter(
+    #     numSolverIterations=150,  # More iterations for better contact resolution
+    #     contactBreakingThreshold=0.00001,  # Much lower threshold for better contact maintenance
+    #     enableConeFriction=1,  # Enable cone friction for more realistic contacts
+    #     restitutionVelocityThreshold=0.01  # Lower threshold to reduce bouncing
+    # )
 
     # Create floor plane
     plane_id = p.loadURDF("plane.urdf")

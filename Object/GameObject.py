@@ -14,7 +14,8 @@ class GameObject():
         self.__position = position
         self.__orientation = orientation
         self.__body_id = None
-
+        self.__constraint_id = None
+        
         GameObject.count += 1
 
     def __del__(self) -> None:
@@ -50,18 +51,15 @@ class GameObject():
         """
         self.__body_id = p.loadURDF(self.__urdf_file, list(self.__position), list(self.__orientation))
 
-        # Add Friction and contact properties for better grasping
-        p.changeDynamics(self.body_id, -1, 
-                        lateralFriction=100.0,  # Increased friction to match gripper
-                        rollingFriction=1.0, 
-                        spinningFriction=1.0,
-                        contactStiffness=50000.0,  # Much higher stiffness for better contact
-                        contactDamping=500.0)  # Higher damping to reduce bouncing
 
     def unload(self) -> None:
         """
         Remove the GameObject from the simulation.
         """
+
+        if self.__constraint_id is not None:
+            p.removeConstraint(self.__constraint_id)
+
         if self.__body_id is not None:
             p.removeBody(self.__body_id)
             self.__body_id = None
