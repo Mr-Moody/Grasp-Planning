@@ -1,7 +1,7 @@
 import math
 import numpy as np
 
-from util import drawGizmo
+from util import drawGizmo, removeGizmo
 
 class FibonacciSphere():
     def __init__(self, samples:int=100, radius:float=1.0, cone_angle:float=-2*math.pi, cone_origin:np.ndarray=np.array([0,0,1])) -> None:
@@ -19,7 +19,7 @@ class FibonacciSphere():
         self.cone_origin = cone_origin
         self.vertices = self.generateVertices()
 
-    def generateVertices(self):
+    def generateVertices(self) -> list[np.ndarray]:
         # Reference: https://stackoverflow.com/questions/9600801/evenly-distributing-n-points-on-a-sphere#comment12186258_9600801
         points = []
         phi = math.pi * (3 - math.sqrt(5))  # golden angle in radians
@@ -47,6 +47,11 @@ class FibonacciSphere():
 
         return points
     
-    def visualise(self):
+    def visualise(self) -> None:
+        self.gizmos = []
         for v in self.vertices:
-            drawGizmo(v)
+            self.gizmos.append(drawGizmo(v))
+
+    def removeVisualisation(self) -> None:
+        for gizmo_id in self.gizmos:
+            removeGizmo(gizmo_id)

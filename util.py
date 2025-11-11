@@ -40,11 +40,17 @@ def pause(wait_time:float):
         p.stepSimulation()
         time.sleep(TICK_RATE)
 
-def drawGizmo(position:np.ndarray=np.array([0,0,0]), scale=0.005, color=[0, 0, 0, 1]):
+def drawGizmo(position:np.ndarray=np.array([0,0,0]), scale:float=0.005, color:list[float]=[0, 0, 0, 1]) -> int:
     sphere = p.createVisualShape(
         shapeType=p.GEOM_SPHERE,
         radius=scale,
         rgbaColor=color  # black by default
     )
     
-    p.createMultiBody(baseVisualShapeIndex=sphere, basePosition=position)
+    gizmo_id = p.createMultiBody(baseVisualShapeIndex=sphere, basePosition=position)
+
+    return gizmo_id
+
+def removeGizmo(gizmo_id:int) -> None:
+    if gizmo_id is not None:
+        p.removeBody(gizmo_id)

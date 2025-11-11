@@ -15,6 +15,8 @@ class GameObject():
         self.__orientation = orientation
         self.__id = None
         self.__constraint_id = None
+
+        self.grasp_offset = np.array([0,0,0])
         
         GameObject.count += 1
 

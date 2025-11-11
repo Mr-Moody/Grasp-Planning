@@ -251,7 +251,7 @@ class TwoFingerGripper(Gripper):
 
         start_position = object.getPosition()
         start_orientation = self.getOrientation()
-        target_position = start_position + np.array([0,0,0.1])
+        target_position = start_position + np.array([0,0,0.2])
         target_orientation = start_orientation
         duration = 0.5
         steps = 25

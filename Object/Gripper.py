@@ -7,24 +7,25 @@ import time
 
 from Object.GameObject import GameObject
 
-class Gripper(GameObject, ABC):
-    def __init__(self, name:str="Gripper", urdf_file:str="pr2_gripper.urdf", position:np.ndarray=np.array([0,0,0]), orientation:np.ndarray=np.array([0,0,0,1]), joint_positions:list[float]=[], offset:list=[0,0,0]) -> None:
-        # Initialise GameObject for Gripper
-        super().__init__(name=name, 
-                         urdf_file=urdf_file, 
-                         position=position, 
-                         orientation=orientation)
-        
-        self.joint_positions = joint_positions
+class Gripper():
+    """Base gripper class that defines common gripper behavior."""
+    def __init__(self, name, urdf_file, position, orientation, offset):
+        self.urdf_file = urdf_file
+        self.position = position
+        self.orientation = orientation
         self.offset = offset
+        self.id = None
+        self.constraint_id = None
+        self.grasp_moving = False
 
-    def load(self) -> None:
-        """
-        Load the Gripper into the simulation.
-        """
-        super().load()
-        
-        self.gripper_constraint = p.createConstraint(
+    def load(self):
+        """Load gripper into the PyBullet world."""
+        self.id = p.loadURDF(self.urdf_file, *self.position)
+
+        # Set moderate damping to reduce oscillation while allowing smooth movement
+        p.changeDynamics(self.id, -1, linearDamping=0.5, angularDamping=0.5)
+
+        self.constraint_id = p.createConstraint(
             parentBodyUniqueId=self.id,
             parentLinkIndex=-1,
             childBodyUniqueId=-1,
@@ -32,73 +33,111 @@ class Gripper(GameObject, ABC):
             jointType=p.JOINT_FIXED,
             jointAxis=[0, 0, 0],
             parentFramePosition=self.offset,
-            childFramePosition=self.position,
-            childFrameOrientation=self.orientation
+            childFramePosition=self.position
         )
+
+        return self.id
+    
+    def unload(self):
+        """Remove gripper from the PyBullet world."""
+        if self.constraint_id is not None:
+            p.removeConstraint(self.constraint_id)
+            self.constraint_id = None
+        if self.id is not None:
+            p.removeBody(self.id)
+            self.id = None
         
 
-    @abstractmethod
-    def open(self) -> None:
-        raise NotImplementedError(f"open() method not implemented for {type(self).__name__}.")
+    def moveToPosition(self, target_position, target_orientation=None, duration:float=1, steps:int=20):
+        """Move gripper to a new position and orientation."""
+        
+        if self.constraint_id is None:
+            raise ValueError("Gripper must be fixed before moving.")
 
-    @abstractmethod
-    def close(self) -> None:
-        raise NotImplementedError(f"close() method not implemented for {type(self).__name__}.")
-    
-    def lockPosition(self) -> None:
-        """
-        Lock the gripper position by updating the constraint with current position.
-        This helps prevent movement during closing.
-        """
-        position, orientation = self.getPositionAndOrtientation()
-        p.changeConstraint(self.gripper_constraint,
-                          jointChildPivot=position,
-                          jointChildFrameOrientation=orientation,
-                          maxForce=50)
-    
-    def setPosition(self, new_position:Optional[np.ndarray]=None, new_orientation:Optional[np.ndarray]=None) -> None:
-        """
-        Override setPosition to also update the constraint.
-        This ensures the gripper constraint stays synchronized with the gripper position.
-        """
-        if new_position is None:
-            new_position = self.position
-
-        if new_orientation is None:
-            new_orientation = self.orientation
-
-        # Update the base position/orientation
-        super().setPosition(new_position, new_orientation)
-
-        # Update the constraint to match the new position/orientation
-        if hasattr(self, 'gripper_constraint') and self.gripper_constraint is not None:
-            p.changeConstraint(self.gripper_constraint,
-                                jointChildPivot=new_position,
-                                jointChildFrameOrientation=new_orientation,
-                                maxForce=50)
-
-    def moveToPosition(self, target_position:np.ndarray, target_orientation:Optional[np.ndarray]=None, duration:float=1.0, steps:int=240) -> None:
-        """
-        Move the object to a target position and orientation over a specified duration.
-        """
-        position, orientation = self.getPositionAndOrtientation()
+        start_position, start_orientation = self.getPositionAndOrientation()
 
         if target_orientation is None:
-            target_orientation = orientation
+            target_orientation = start_orientation
+
+        # Create Slerp interpolator once outside the loop
+        key_rots = R.from_quat([start_orientation, target_orientation])
+        slerp = Slerp([0, 1], key_rots)
+
+        # Calculate simulation steps per movement step (multiple steps help constraint settle)
+        sim_steps_per_update = max(5, int(240 * duration / steps))  # Ensure smooth constraint resolution
 
         for step in range(steps):
-            self.close()
             t = (step + 1) / steps
-            new_position = position * (1 - t) + target_position * t
+            # Interpolate from fixed start position to avoid oscillation
+            new_position = start_position * (1 - t) + target_position * t
             # Spherical linear interpolation (slerp) for smooth rotation
-            slerp = Slerp([0, 1], R.from_quat([orientation, target_orientation]))
             slerped_rot = slerp(t)
             new_orientation = slerped_rot.as_quat(canonical=True)
 
-            self.setPosition(new_position=new_position, new_orientation=new_orientation)
-            p.stepSimulation()
+            # Update constraint with higher force for direct movement
+            p.changeConstraint(
+                self.constraint_id,
+                jointChildPivot=new_position,
+                jointChildFrameOrientation=new_orientation,
+                maxForce=500)  # Increased force for more direct movement
+
+            # Run multiple simulation steps to allow constraint to settle
+            for _ in range(sim_steps_per_update):
+                p.stepSimulation()
+            
             time.sleep(duration / steps)
         
+        
+    
+    def setPosition(self, new_position:np.ndarray=None, new_orientation:np.ndarray=None) -> None:
+        """
+        Move object to new position and orientation.
+        """
+        if new_position is None:
+            new_position = self.__position
+
+        if new_orientation is None:
+            new_orientation = self.__orientation
+
+        self.__position = new_position
+        self.__orientation = new_orientation
+
+        p.resetBasePositionAndOrientation(self.id, new_position, new_orientation)
+        
+        # Update constraint to match new position
+        if self.constraint_id is not None:
+            p.changeConstraint(
+                self.constraint_id,
+                jointChildPivot=new_position,
+                jointChildFrameOrientation=new_orientation,
+                maxForce=500)
+
+    def getPositionAndOrientation(self) -> tuple[np.ndarray, np.ndarray]:
+        """
+        Returns the current position and orientation of the GameObject.
+        """
+        position, orientation = p.getBasePositionAndOrientation(self.id)
+        self.__position = np.array(position)
+        self.__orientation = np.array(orientation)
+
+        return self.__position, self.__orientation
+
+    def getPosition(self) -> np.ndarray:
+        """
+        Returns the current position of the GameObject.
+        """
+        position, _ = self.getPositionAndOrientation()
+
+        return position
+    
+    def getOrientation(self) -> np.ndarray:
+        """
+        Returns the current orientation of the GameObject.
+        """
+        _, orientation = self.getPositionAndOrientation()
+
+        return orientation
+    
 
     def orientationToTarget(self, target:np.ndarray=np.array([0,0,0])) -> np.ndarray:
         """
@@ -145,11 +184,3 @@ class Gripper(GameObject, ABC):
         p.addUserDebugLine(position, position + 0.1 * axes[:,0], [1,0,0], 2)
         p.addUserDebugLine(position, position + 0.1 * axes[:,1], [0,1,0], 2)
         p.addUserDebugLine(position, position + 0.1 * axes[:,2], [0,0,1], 2)
-
-    def updateCamera(self, z, yaw):
-        p.resetDebugVisualizerCamera(
-            cameraDistance=0.5,
-            cameraYaw=50 + (yaw * 180 / 3.1416),
-            cameraPitch=-60,
-            cameraTargetPosition=[0.5, 0.3, z]
-        )
