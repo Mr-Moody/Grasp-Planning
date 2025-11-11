@@ -29,6 +29,9 @@ class Gripper():
         """Load gripper into the PyBullet world."""
         self.id = p.loadURDF(self.urdf_file, *self.position)
 
+        # Set moderate damping to reduce oscillation while allowing smooth movement
+        p.changeDynamics(self.id, -1, linearDamping=0.5, angularDamping=0.5)
+
         self.constraint_id = p.createConstraint(
             parentBodyUniqueId=self.id,
             parentLinkIndex=-1,
@@ -58,27 +61,37 @@ class Gripper():
         if self.constraint_id is None:
             raise ValueError("Gripper must be fixed before moving.")
 
-        position, orientation = self.getPositionAndOrientation()
+        start_position, start_orientation = self.getPositionAndOrientation()
 
         if target_orientation is None:
-            target_orientation = orientation
+            target_orientation = start_orientation
+
+        # Create Slerp interpolator once outside the loop
+        key_rots = R.from_quat([start_orientation, target_orientation])
+        slerp = Slerp([0, 1], key_rots)
+
+        # Calculate simulation steps per movement step (multiple steps help constraint settle)
+        sim_steps_per_update = max(5, int(240 * duration / steps))  # Ensure smooth constraint resolution
 
         for step in range(steps):
             t = (step + 1) / steps
-            new_position = position * (1 - t) + target_position * t
+            # Interpolate from fixed start position to avoid oscillation
+            new_position = start_position * (1 - t) + target_position * t
             # Spherical linear interpolation (slerp) for smooth rotation
-            slerp = Slerp([0, 1], R.from_quat([orientation, target_orientation]))
             slerped_rot = slerp(t)
             new_orientation = slerped_rot.as_quat(canonical=True)
 
-            
+            # Update constraint with higher force for direct movement
             p.changeConstraint(
                 self.constraint_id,
                 jointChildPivot=new_position,
                 jointChildFrameOrientation=new_orientation,
-                maxForce=50)
+                maxForce=500)  # Increased force for more direct movement
 
-            p.stepSimulation()
+            # Run multiple simulation steps to allow constraint to settle
+            for _ in range(sim_steps_per_update):
+                p.stepSimulation()
+            
             time.sleep(duration / steps)
         
         
@@ -97,6 +110,14 @@ class Gripper():
         self.__orientation = new_orientation
 
         p.resetBasePositionAndOrientation(self.id, new_position, new_orientation)
+        
+        # Update constraint to match new position
+        if self.constraint_id is not None:
+            p.changeConstraint(
+                self.constraint_id,
+                jointChildPivot=new_position,
+                jointChildFrameOrientation=new_orientation,
+                maxForce=500)
 
     def getPositionAndOrientation(self) -> tuple[np.ndarray, np.ndarray]:
         """
@@ -180,7 +201,7 @@ class TwoFingerGripper(Gripper):
     MAX_VELOCITY = 2
 
     def __init__(self, position:np.ndarray=np.array([0,0,0]), orientation:np.ndarray=np.array([0,0,0,1])):
-        super().__init__(name="Gripper", urdf_file="pr2_gripper.urdf", position=position, orientation=orientation, offset=[0.27, 0, 0])
+        super().__init__(name="Gripper", urdf_file="pr2_gripper.urdf", position=position, orientation=orientation, offset=np.array([0.3, 0, 0]))
 
     def load(self):
         """Open gripper at start."""
@@ -218,40 +239,50 @@ class TwoFingerGripper(Gripper):
         self.setPosition(new_orientation=orientation)
         p.stepSimulation()
 
-        # Move towards object
-        self.moveToPosition(target + object.grasp_offset, duration=1, steps=50)
-        pause(1)
+        # Move towards object - use more steps for smoother, more direct movement
+        self.moveToPosition(target + object.grasp_offset, duration=0.2, steps=25)
+        pause(0.5)
         
         
         # Close gripper
         self.close()
-        pause(2)
+        pause(1)
 
 
-        position, target_orientation = self.getPositionAndOrientation()
-        target_position = position + np.array([0,0,0.05])
-        duration = 3
-        steps = 100
+        start_position = object.getPosition()
+        start_orientation = self.getOrientation()
+        target_position = start_position + np.array([0,0,0.1])
+        target_orientation = start_orientation
+        duration = 0.5
+        steps = 25
 
-        # Lift object
+        # Create Slerp interpolator once outside the loop
+        key_rots = R.from_quat([start_orientation, target_orientation])
+        slerp = Slerp([0, 1], key_rots)
+
+        # Calculate simulation steps per movement step
+        sim_steps_per_update = max(5, int(240 * duration / steps))
+
+        # Lift object - use fixed start position to avoid oscillation
         for step in range(steps):
-            position, orientation = self.getPositionAndOrientation()
-            
             t = (step + 1) / steps
-            new_position = position * (1 - t) + target_position * t
+            # Interpolate from fixed start position, not current position
+            new_position = start_position * (1 - t) + target_position * t
             # Spherical linear interpolation (slerp) for smooth rotation
-            slerp = Slerp([0, 1], R.from_quat([orientation, target_orientation]))
             slerped_rot = slerp(t)
             new_orientation = slerped_rot.as_quat(canonical=True)
 
-            
+            # Update constraint with high force for direct movement
             p.changeConstraint(
                 self.constraint_id,
                 jointChildPivot=new_position,
                 jointChildFrameOrientation=new_orientation,
-                maxForce=20)
+                maxForce=300) 
 
-            p.stepSimulation()
+            # Run multiple simulation steps to allow constraint to settle
+            for _ in range(sim_steps_per_update):
+                p.stepSimulation()
+            
             time.sleep(duration / steps)
 
 
