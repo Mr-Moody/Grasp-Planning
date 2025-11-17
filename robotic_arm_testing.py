@@ -7,8 +7,8 @@ import numpy as np
 from Object.GameObject import GameObject
 from Object.TwoFingerGripper import TwoFingerGripper
 from Object.ThreeFingerGripper import ThreeFingerGripper
-from Object.RoboticArm import RoboticArm
-from Planning.Sphere import FibonacciSphere
+from Object.roboticArm import RoboticArm
+from Planning.sphere import FibonacciSphere
 from util import drawGizmo, setupEnvironment, pause
 from constants import TIME, TICK_RATE, NUM_TICKS
 
