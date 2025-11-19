@@ -4,13 +4,16 @@ import numpy as np
 import time
 import os
 
-from constants import TIME, TICK_RATE, NUM_TICKS
+from constants import TIME, TICK_RATE, NUM_TICKS, GUI
 
 def setupEnvironment():
     # Connect to physics server
     cid = p.connect(p.SHARED_MEMORY)
     if cid < 0:
-        p.connect(p.GUI)
+        if GUI:
+            p.connect(p.GUI)
+        else:
+            p.connect(p.DIRECT)
 
     
     p.resetSimulation()
@@ -35,10 +38,13 @@ def pause(wait_time:float):
     """
     Run simulation for time seconds.
     """
-    t0 = time.time()
-    while ((time.time() - t0) < wait_time):
+    num_steps = int(wait_time / TICK_RATE)
+
+    for _ in range(num_steps):
         p.stepSimulation()
-        time.sleep(TICK_RATE)
+        
+        if GUI:
+            time.sleep(TICK_RATE)
 
 def drawGizmo(position:np.ndarray=np.array([0,0,0]), scale:float=0.005, color:list[float]=[0, 0, 0, 1]) -> int:
     sphere = p.createVisualShape(

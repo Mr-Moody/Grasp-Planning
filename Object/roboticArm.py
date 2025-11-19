@@ -18,7 +18,7 @@ class RoboticArm():
             # Attach gripper to robot
             self.gripper_constraint = p.createConstraint(parentBodyUniqueId=self.robotId,
                                                         parentLinkIndex=6,
-                                                        childBodyUniqueId=self.gripper.body_id,
+                                                        childBodyUniqueId=self.gripper.id,
                                                         childLinkIndex=-1,
                                                         jointType=p.JOINT_FIXED,
                                                         jointAxis=[0,0,0],

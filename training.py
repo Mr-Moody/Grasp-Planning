@@ -1,13 +1,8 @@
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.datasets import make_classification
+"""
+Legacy training script - see train_grasp_model.py for the full implementation.
+This file is kept for reference but train_grasp_model.py should be used instead.
+"""
+from train_grasp_model import main
 
-# Train classification model from approach position, approach orientation and offset
-
-X, y = make_classification(n_samples=1000, n_features=4,
-                           n_informative=2, n_redundant=0,
-                           random_state=0, shuffle=False)
-
-clf = RandomForestClassifier(max_depth=2, random_state=0)
-clf.fit(X, y)
-
-print(clf.predict([[0, 0, 0, 0]]))
+if __name__ == "__main__":
+    main()
