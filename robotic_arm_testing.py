@@ -1,7 +1,7 @@
 import pybullet as p
 import pybullet_data
 import numpy as np
-from Planning import sphere 
+from Planning.Sphere import FibonacciSphere 
 import time
 import os
 
@@ -124,7 +124,7 @@ def grasp_sampling(): # Main loop
     cube_start_pos = [0, 0, 0]
     cube_id = p.loadURDF("cube_small.urdf", cube_start_pos)
 
-    sphere_obj = sphere.FibonacciSphere(samples=50, radius=0.20)
+    sphere_obj = FibonacciSphere(samples=50, radius=0.20)
     approach_points = np.array(sphere_obj.vertices)
     results = [] # RESULTS: approach point, success bool
 
