@@ -49,8 +49,8 @@ class TwoFingerGripper(Gripper):
             grasp_offset = object.grasp_offset
 
         # Set friction on contact surfaces
-        p.changeDynamics(object.id, -1, lateralFriction=1.0, rollingFriction=0.1, spinningFriction=0.1)
-        p.changeDynamics(self.id, -1, lateralFriction=1.0, rollingFriction=0.1, spinningFriction=0.1)
+        p.changeDynamics(object.id, -1, lateralFriction=0.5, rollingFriction=0.1, spinningFriction=0.1)
+        p.changeDynamics(self.id, -1, lateralFriction=0.5, rollingFriction=0.1, spinningFriction=0.1)
 
         target = object.getPosition()
         orientation = self.orientationToTarget(target)

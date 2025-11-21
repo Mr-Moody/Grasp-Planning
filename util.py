@@ -3,14 +3,23 @@ import pybullet_data
 import numpy as np
 import time
 import os
-
+from typing import Optional
 from constants import TIME, TICK_RATE, NUM_TICKS, GUI
 
-def setupEnvironment():
+global_gui = False
+
+def setupEnvironment(gui:Optional[bool]=None):
+    global global_gui
+
     # Connect to physics server
     cid = p.connect(p.SHARED_MEMORY)
     if cid < 0:
-        if GUI:
+        if gui is None:
+            gui = GUI
+
+        global_gui = gui
+
+        if global_gui:
             p.connect(p.GUI)
         else:
             p.connect(p.DIRECT)
@@ -43,7 +52,7 @@ def pause(wait_time:float):
     for _ in range(num_steps):
         p.stepSimulation()
         
-        if GUI:
+        if global_gui:
             time.sleep(TICK_RATE)
 
 def drawGizmo(position:np.ndarray=np.array([0,0,0]), scale:float=0.005, color:list[float]=[0, 0, 0, 1]) -> int:
