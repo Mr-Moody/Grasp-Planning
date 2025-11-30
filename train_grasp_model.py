@@ -24,12 +24,6 @@ def loadGraspData(data_file="Samples/grasp_data.csv"):
     # Load data from CSV using pandas
     df = pd.read_csv(data_file)
     
-    # Extract features and labels
-    # Feature columns in order:
-    # 1. Orientation (3): roll, pitch, yaw
-    # 2. Offset (3): x, y, z
-    # 3. Approach direction (3): x, y, z
-    # 4. Approach distance (1)
     feature_columns = [
         "orientation_roll",
         "orientation_pitch",
