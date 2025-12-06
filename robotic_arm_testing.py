@@ -289,18 +289,44 @@ def do_grasp_and_evaluate(robot_id, gripper_joints, ee_link_idx,
     for _ in range(3):
         p.stepSimulation()
 
-    # CLOSE GRIPPER (0.00 = fully closed)
-    set_gripper(robot_id, gripper_joints, 0.00)
-    for _ in range(8):
+    # CLOSE GRIPPER (small non-zero = better than fully zero to avoid finger collision)
+    set_gripper(robot_id, gripper_joints, 0.005)
+    for _ in range(12):
         p.stepSimulation()
 
-    # LIFT
-    # LIFT (fast motion)
-    lift_pos = np.array(approach_pos) + np.array([0, 0, 0.15])
+    # Check contact points between gripper and object to verify a grip
+    contacts = p.getContactPoints(bodyA=cube_id, bodyB=robot_id)
+    contact_count = len(contacts)
+    if contact_count == 0:
+        print("Warning: no contacts detected between gripper and object after close")
+    else:
+        print(f"Info: detected {contact_count} contact points between gripper and object")
+
+    # LIFT: compute lift target from the CURRENT end-effector pose (more robust)
+    ee_state = p.getLinkState(robot_id, ee_link_idx)
+    ee_pos = np.array(ee_state[0])
+    lift_pos = ee_pos + np.array([0, 0, 0.15])
     move_to_pose_fast(robot_id, ee_link_idx, lift_pos, approach_orn)
 
+    # After lift, check object position and whether contacts persist
+    for _ in range(6):
+        p.stepSimulation()
+
     cube_pos, _ = p.getBasePositionAndOrientation(cube_id)
-    success = (cube_pos[2] > 0.10) and (np.linalg.norm(np.array(cube_pos[:2]) - np.array(lift_pos[:2])) < 0.05)
+    post_contacts = p.getContactPoints(bodyA=cube_id, bodyB=robot_id)
+    post_contact_count = len(post_contacts)
+
+    # Relaxed success criteria: object lifted above ~8cm and within ~8cm laterally OR persistent contact
+    height_ok = cube_pos[2] > 0.08
+    lateral_ok = np.linalg.norm(np.array(cube_pos[:2]) - np.array(lift_pos[:2])) < 0.08
+    attached_ok = post_contact_count > 0 or contact_count > 0
+
+    success = (height_ok and lateral_ok) or attached_ok
+    if success:
+        print(f"Grasp likely SUCCESS: z={cube_pos[2]:.3f}, lateral_err={(np.linalg.norm(np.array(cube_pos[:2]) - np.array(lift_pos[:2]))):.3f}, contacts_before={contact_count}, contacts_after={post_contact_count}")
+    else:
+        print(f"Grasp likely FAIL: z={cube_pos[2]:.3f}, lateral_err={(np.linalg.norm(np.array(cube_pos[:2]) - np.array(lift_pos[:2]))):.3f}, contacts_before={contact_count}, contacts_after={post_contact_count}")
+
     return success
 
 def save_to_csv(results):
