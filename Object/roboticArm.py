@@ -371,7 +371,7 @@ class RoboticArm:
         
         results = []
         print("Sphere visualized. Starting 200 RANDOM grasp tests...")
-        time.sleep(2.0 / SIMULATION_SPEED)
+        time.sleep(2.0 / self.SIMULATION_SPEED)
         
         tested_points = set()
         
