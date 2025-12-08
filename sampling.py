@@ -9,7 +9,7 @@ from datetime import datetime
 from scipy.spatial.transform import Rotation as R
 
 from Object.TwoFingerGripper import TwoFingerGripper
-from Object.Objects import Box, Cylinder, Duck
+from Object.Objects import Box, Cylinder, Duck, RoboticArm
 from Planning.Sphere import FibonacciSphere
 from util import drawGizmo, setupEnvironment, pause
 from constants import TIME, TICK_RATE, NUM_TICKS
@@ -133,118 +133,125 @@ def checkGraspSuccess(object, initial_object_pos, threshold=0.15):
     return success
 
 if __name__ == "__main__":
-    grasp_data = []
-    gripper_type = "TwoFingerGripper"
+    gripper_type = "TwoFingerGripper"  # Change to "RoboticArm" to use RoboticArm instead
 
-    # Noise ranges for uniform random distribution (noise will be in [-range/2, range/2])
-    roll_noise_range = 1
-    pitch_noise_range = 1
-    yaw_noise_range = 1
-    offset_noise_range = 0.06
+    if gripper_type == "TwoFingerGripper":
+        grasp_data = []
 
-    plane_id = setupEnvironment()
-    gripper_start = np.array([0,0,1])
-    object_start = np.array([0,0,0.06])
+        # Noise ranges for uniform random distribution (noise will be in [-range/2, range/2])
+        roll_noise_range = 1
+        pitch_noise_range = 1
+        yaw_noise_range = 1
+        offset_noise_range = 0.06
 
-    s = FibonacciSphere(samples=400, radius=0.6, cone_angle=math.pi)
-    s.visualise()
-    p.stepSimulation()
+        plane_id = setupEnvironment()
+        gripper_start = np.array([0,0,1])
+        object_start = np.array([0,0,0.06])
 
-    for v in s.vertices:
-        # Initialise gripper and object
-        gripper = TwoFingerGripper(position=v)
-        object = Box(position=object_start)
+        s = FibonacciSphere(samples=400, radius=0.6, cone_angle=math.pi)
+        s.visualise()
+        p.stepSimulation()
 
-        if not grasp_data:
-            gripper_type = type(gripper).__name__
-        
-        gripper.load()
-        object.load()
+        for v in s.vertices:
+            # Initialise gripper and object
+            gripper = TwoFingerGripper(position=v)
+            object = Box(position=object_start)
 
-        # Let object settle
-        for _ in range(50):
+            if not grasp_data:
+                gripper_type = type(gripper).__name__
+            
+            gripper.load()
+            object.load()
+
+            # Let object settle
+            for _ in range(50):
+                p.stepSimulation()
+            
+            target = object.getPosition()
+            orientation = gripper.orientationToTarget(target)
+            
+            # Add noise to orientation
+            noisy_orientation = addNoiseToOrientation(
+                orientation, 
+                roll_noise_range=roll_noise_range,
+                pitch_noise_range=pitch_noise_range,
+                yaw_noise_range=yaw_noise_range
+            )
+            gripper.setPosition(new_position=v, new_orientation=noisy_orientation)
             p.stepSimulation()
-        
-        target = object.getPosition()
-        orientation = gripper.orientationToTarget(target)
-        
-        # Add noise to orientation
-        noisy_orientation = addNoiseToOrientation(
-            orientation, 
-            roll_noise_range=roll_noise_range,
-            pitch_noise_range=pitch_noise_range,
-            yaw_noise_range=yaw_noise_range
-        )
-        gripper.setPosition(new_position=v, new_orientation=noisy_orientation)
-        p.stepSimulation()
-        
-        gripper.open()
-        p.stepSimulation()
+            
+            gripper.open()
+            p.stepSimulation()
 
-        initial_object_pos = object.getPosition()
+            initial_object_pos = object.getPosition()
+            
+            # Add uniform random noise to grasp offset and extract ml features
+            original_grasp_offset = object.grasp_offset
+            noisy_grasp_offset = addNoiseToOffset(original_grasp_offset, offset_noise_range=offset_noise_range)
+            features = extractFeatures(gripper, object, v, noisy_grasp_offset)
+            
+            # Pass noisy offset to graspObject so it uses the noisy offset in the actual grasp
+            gripper.graspObject(object, grasp_offset=noisy_grasp_offset)
+            
+            success = checkGraspSuccess(object, initial_object_pos)
+            
+            sample = {
+                "features": features,
+                "label": 1 if success else 0,
+                "object_type": "Box",
+                "approach_vertex": v.tolist(),
+                "grasp_offset": noisy_grasp_offset.tolist()
+            }
+
+            grasp_data.append(sample)
+
+            gripper.unload()
+            object.unload()
+
+        # Determine object type for filename
+        object_type = grasp_data[0]["object_type"] if grasp_data else "Box"
+
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"{gripper_type}_{object_type}_{timestamp}.csv"
         
-        # Add uniform random noise to grasp offset and extract ml features
-        original_grasp_offset = object.grasp_offset
-        noisy_grasp_offset = addNoiseToOffset(original_grasp_offset, offset_noise_range=offset_noise_range)
-        features = extractFeatures(gripper, object, v, noisy_grasp_offset)
+        output_file = os.path.join("Samples", filename)
         
-        # Pass noisy offset to graspObject so it uses the noisy offset in the actual grasp
-        gripper.graspObject(object, grasp_offset=noisy_grasp_offset)
+        # Convert to DataFrame - flatten nested structure
+        records = []
+        for sample in grasp_data:
+            record = {
+                "orientation_roll": sample["features"]["orientation_roll"],
+                "orientation_pitch": sample["features"]["orientation_pitch"],
+                "orientation_yaw": sample["features"]["orientation_yaw"],
+                "offset_x": sample["features"]["offset_x"],
+                "offset_y": sample["features"]["offset_y"],
+                "offset_z": sample["features"]["offset_z"],
+                "approach_dir_x": sample["features"]["approach_dir_x"],
+                "approach_dir_y": sample["features"]["approach_dir_y"],
+                "approach_dir_z": sample["features"]["approach_dir_z"],
+                "approach_distance": sample["features"]["approach_distance"],
+                "label": sample["label"],
+                "object_type": sample["object_type"]
+            }
+            records.append(record)
         
-        success = checkGraspSuccess(object, initial_object_pos)
+        # Create DataFrame and save to CSV
+        df = pd.DataFrame(records)
+        df.to_csv(output_file, index=False)
         
-        sample = {
-            "features": features,
-            "label": 1 if success else 0,
-            "object_type": "Box",
-            "approach_vertex": v.tolist(),
-            "grasp_offset": noisy_grasp_offset.tolist()
-        }
+        print(f"\nData collection complete!")
+        print(f"Total samples collected: {len(grasp_data)}")
+        print(f"Data saved to: {output_file}")
+        
+        if len(grasp_data) > 0:
+            success_count = sum(s["label"] for s in grasp_data)
+            print(f"Success rate: {success_count / len(grasp_data) * 100:.2f}%")
 
-        grasp_data.append(sample)
+        s.removeVisualisation()
+ 
+    elif gripper_type == "RoboticArm":
+        
+        arm = RoboticArm()
+        arm.robotic_arm_grasp_sampling()
 
-        gripper.unload()
-        object.unload()
-
-    # Determine object type for filename
-    object_type = grasp_data[0]["object_type"] if grasp_data else "Box"
-
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    filename = f"{gripper_type}_{object_type}_{timestamp}.csv"
-    
-    output_file = os.path.join("Samples", filename)
-    
-    # Convert to DataFrame - flatten nested structure
-    records = []
-    for sample in grasp_data:
-        record = {
-            "orientation_roll": sample["features"]["orientation_roll"],
-            "orientation_pitch": sample["features"]["orientation_pitch"],
-            "orientation_yaw": sample["features"]["orientation_yaw"],
-            "offset_x": sample["features"]["offset_x"],
-            "offset_y": sample["features"]["offset_y"],
-            "offset_z": sample["features"]["offset_z"],
-            "approach_dir_x": sample["features"]["approach_dir_x"],
-            "approach_dir_y": sample["features"]["approach_dir_y"],
-            "approach_dir_z": sample["features"]["approach_dir_z"],
-            "approach_distance": sample["features"]["approach_distance"],
-            "label": sample["label"],
-            "object_type": sample["object_type"]
-        }
-        records.append(record)
-    
-    # Create DataFrame and save to CSV
-    df = pd.DataFrame(records)
-    df.to_csv(output_file, index=False)
-    
-    print(f"\nData collection complete!")
-    print(f"Total samples collected: {len(grasp_data)}")
-    print(f"Data saved to: {output_file}")
-    
-    if len(grasp_data) > 0:
-        success_count = sum(s["label"] for s in grasp_data)
-        print(f"Success rate: {success_count / len(grasp_data) * 100:.2f}%")
-
-    s.removeVisualisation()
-
-    p.disconnect()
+    p.disconnect() 
