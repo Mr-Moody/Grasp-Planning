@@ -197,7 +197,7 @@ def saveGraspData(grasp_data, gripper_type, object_type="Box"):
     
     return output_file
 
-def main(gripper_type:str="TwoFingerGripper", object_type:str="Box", gui:bool=False):
+def main(num_samples:int=500, gripper_type:str="TwoFingerGripper", object_type:str="Box", gui:bool=False):
 
     if gripper_type == "TwoFingerGripper":
         grasp_data = []
@@ -212,7 +212,7 @@ def main(gripper_type:str="TwoFingerGripper", object_type:str="Box", gui:bool=Fa
         gripper_start = np.array([0,0,1])
         object_start = np.array([0,0,0.06])
 
-        s = FibonacciSphere(samples=1000, radius=0.6, cone_angle=math.pi)
+        s = FibonacciSphere(samples=2*num_samples, radius=0.6, cone_angle=math.pi)
         s.visualise()
         p.stepSimulation()
 
