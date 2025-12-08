@@ -18,6 +18,7 @@ class Cylinder(GameObject):
         
 class Duck(GameObject):
     def __init__(self, position):
-        super().__init__(name="Duck", urdf_file="duck_vhacd.urdf", position=position, orientation=p.getQuaternionFromEuler([np.pi/2, 0, 0]))
-        self.grasp_offset = np.array([0,0,0.01])
+        orientation = p.getQuaternionFromEuler([np.pi/2, 0, 0])
+        super().__init__(name="Duck", urdf_file="duck_vhacd.urdf", position=position, orientation=orientation)
+        self.grasp_offset = np.array([0, 0, 0.01])
         self.name = f"Duck_{self.id}"

@@ -5,7 +5,7 @@ from mpl_toolkits.mplot3d import Axes3D
 from typing import cast
 import os
 
-def visualise_grasps(csv_file: str):
+def visualiseGrasps(csv_file: str):
     df = pd.read_csv(csv_file)
 
     center = np.array([0.0, 0.0, 0.0])

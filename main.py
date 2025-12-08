@@ -17,9 +17,11 @@ import train_grasp_model
 import predict_grasp
 import pybullet as p
 
+def modeGenerateData(args):
+    """
+    Generate grasp dataset by sampling.
+    """
 
-def mode_generate_data(args):
-    """Generate grasp dataset by sampling."""
     print("=" * 60)
     print("Grasp Data Generation")
     print("=" * 60)
@@ -51,8 +53,11 @@ def mode_generate_data(args):
             pass
 
 
-def mode_train_classifier(args):
-    """Train a classifier on the generated data."""
+def modeTrainClassifier(args):
+    """
+    Train a classifier on the generated data.
+    """
+
     print("=" * 60)
     print("Classifier Training")
     print("=" * 60)
@@ -71,30 +76,41 @@ def mode_train_classifier(args):
         sys.exit(1)
 
 
-def parse_bounds(bounds_str):
-    """Parse bounds string like \"(-1.0,1.0),(-1.0,1.0),(0.3,1.0)\" into tuple of tuples."""
+def parseBounds(bounds_str):
+    """
+    Parse bounds string like \"(-1.0,1.0),(-1.0,1.0),(0.3,1.0)\" into tuple of tuples.
+    """
     try:
         # Split by \"),(\" pattern
         parts = bounds_str.split("),(")
         bounds = []
+
         for i, part in enumerate(parts):
             # Remove parentheses from first and last parts
             if i == 0:
                 part = part.lstrip("(")
             if i == len(parts) - 1:
                 part = part.rstrip(")")
+
             # Parse values
             values = [float(x.strip()) for x in part.split(",")]
+
             if len(values) != 2:
                 raise ValueError("Each bound must have exactly 2 values")
+
             bounds.append(tuple(values))
+
         return tuple(bounds)
+
     except Exception as e:
         raise argparse.ArgumentTypeError(f"Invalid bounds format: {e}")
 
 
-def mode_test_planner(args):
-    """Test the planner by finding best grasps."""
+def modeTestPlanner(args):
+    """
+    Test the planner by finding best grasps.
+    """
+
     print("=" * 60)
     print("Grasp Planner Testing")
     print("=" * 60)
@@ -120,8 +136,8 @@ def mode_test_planner(args):
         gripper = TwoFingerGripper()
         
         # Parse bounds
-        approach_bounds = parse_bounds(args.approach_bounds)
-        offset_bounds = parse_bounds(args.offset_bounds)
+        approach_bounds = parseBounds(args.approach_bounds)
+        offset_bounds = parseBounds(args.offset_bounds)
         
         # Find best grasp
         print("Optimising for best grasp...")
@@ -160,6 +176,7 @@ def mode_test_planner(args):
         import traceback
         traceback.print_exc()
         sys.exit(1)
+
     finally:
         # Ensure PyBullet is disconnected
         try:
@@ -168,8 +185,11 @@ def mode_test_planner(args):
             pass
 
 
-def mode_visualise(args):
-    """Visualise grasp data from CSV files."""
+def modeVisualise(args):
+    """
+    Visualise grasp data from CSV files.
+    """
+
     print("=" * 60)
     print("Grasp Data Visualisation")
     print("=" * 60)
@@ -179,12 +199,15 @@ def mode_visualise(args):
     # If relative path, check in Samples directory
     if not os.path.isabs(csv_file):
         samples_path = os.path.join("Samples", csv_file)
+
         if os.path.exists(samples_path):
             csv_file = samples_path
+
         elif not os.path.exists(csv_file):
             # Try just the filename in Samples directory
             filename = os.path.basename(csv_file)
             samples_path = os.path.join("Samples", filename)
+
             if os.path.exists(samples_path):
                 csv_file = samples_path
     
@@ -197,8 +220,8 @@ def mode_visualise(args):
     print()
     
     try:
-        from visualisation import visualise_grasps
-        visualise_grasps(csv_file)
+        from visualisation import visualiseGrasps
+        visualiseGrasps(csv_file)
         print("\nVisualisation completed successfully!")
         
     except Exception as e:
@@ -349,16 +372,15 @@ Examples:
     if args.mode == "visualise" and args.csv_file is None:
         parser.error("--csv_file is required for visualise mode")
     
-    # Route to appropriate mode handler
+    # Call the handler for the mode
     if args.mode == "generate_data":
-        mode_generate_data(args)
+        modeGenerateData(args)
     elif args.mode == "train_classifier":
-        mode_train_classifier(args)
+        modeTrainClassifier(args)
     elif args.mode == "test_planner":
-        mode_test_planner(args)
+        modeTestPlanner(args)
     elif args.mode == "visualise":
-        mode_visualise(args)
-
+        modeVisualise(args)
 
 if __name__ == "__main__":
     main()

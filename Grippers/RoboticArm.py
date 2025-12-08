@@ -7,10 +7,11 @@ import random
 import pandas as pd
 from datetime import datetime
 import math
+from scipy.spatial.transform import Rotation as R
 
 from Planning.Sphere import FibonacciSphere
 from Object.Objects import Box, Cylinder, Duck
-from util import setupEnvironment, pause
+from util import setupEnvironment, pause, addNoiseToOrientation, addNoiseToOffset
 from constants import TICK_RATE
 
 class RoboticArm():
@@ -350,10 +351,13 @@ class RoboticArm():
 
 
     def do_grasp_and_evaluate(self, robot_id, gripper_joints, ee_link_idx,
-                            start_pos, start_orn, approach_pos, approach_orn, object):
+                            start_pos, start_orn, approach_pos, approach_orn, object, grasp_offset=None):
         """
         Move to a start pose (sampled sphere point), then approach the object,
         close the gripper and lift. Returns True on successful lift.
+        
+        Args:
+            grasp_offset: Optional offset from object center [x, y, z]. If None, uses default GRASP_Z_OFFSET.
         """
         # OPEN GRIPPER wide to avoid pushing
         self.set_gripper(robot_id, gripper_joints, 0.08)
@@ -361,9 +365,12 @@ class RoboticArm():
         # Move FAST to the distant start pose (sampled point on the sphere)
         self.move_to_pose_fast(robot_id, ee_link_idx, start_pos, start_orn)
 
-        # Compute a grasp center (slightly above center) and a pre-approach point along the approach direction
+        # Compute a grasp center using the provided offset or default
         object_pos, _ = object.getPositionAndOrientation()
-        grasp_center = np.array(object_pos) + np.array([0, 0, self.GRASP_Z_OFFSET])
+        if grasp_offset is not None:
+            grasp_center = np.array(object_pos) + np.array(grasp_offset)
+        else:
+            grasp_center = np.array(object_pos) + np.array([0, 0, self.GRASP_Z_OFFSET])
 
         # pre-approach: start from further away along -approach_dir so fingers go around object
         approach_dir = np.array(grasp_center) - (np.array(start_pos))
@@ -460,7 +467,7 @@ class RoboticArm():
         print(f"Success rate: {df['label'].mean():.1%}")
         
 
-    def robotic_arm_grasp_sampling(self, object_type:str="Box", gui:bool=True):
+    def robotic_arm_grasp_sampling(self, object_type:str="Box", gui:bool=True, num_samples:int=200):
         setupEnvironment(gui=gui)
 
         robot_id, gripper_joints = self.load_panda()
@@ -469,14 +476,18 @@ class RoboticArm():
         
         ee_link_idx = 11
         # Place object at origin [0, 0, 0]
-        object_start_pos = np.array([0, 0, 0.06])
+        object_start_pos = np.array([0, 0, 0.04])
 
         if object_type == "Box":
             object_id = Box(position=object_start_pos)
+            object_orientation = np.array([0, 0, 0, 1])
         elif object_type == "Cylinder":
             object_id = Cylinder(position=object_start_pos)
+            object_orientation = np.array([0, 0, 0, 1])
         elif object_type == "Duck":
             object_id = Duck(position=object_start_pos)
+            # Duck needs 90-degree rotation about x-axis
+            object_orientation = np.array(p.getQuaternionFromEuler([np.pi/2, 0, 0]))
         else:
             print(f"Unknown object type: {object_type}")
             return
@@ -487,27 +498,38 @@ class RoboticArm():
         for _ in range(50):
             p.stepSimulation()
         
+        # For Duck, reset orientation to 90 degrees about x-axis after settling
+        if object_type == "Duck":
+            current_position, _ = object_id.getPositionAndOrientation()
+            object_id.setPosition(new_position=current_position, new_orientation=object_orientation)
+        
         # Get the actual object position after settling
         object_start_pos, _ = object_id.getPositionAndOrientation()
         object_start_pos = list(object_start_pos)
 
-        sphere_obj = FibonacciSphere(samples=200, radius=0.20)
+        # Noise ranges for uniform random distribution (noise will be in [-range/2, range/2])
+        roll_noise_range = 1
+        pitch_noise_range = 1
+        yaw_noise_range = 1
+        offset_noise_range = 0.11
+
+        sphere_obj = FibonacciSphere(samples=2*num_samples, radius=0.20, cone_angle=math.pi)
 
         # Restrict to the top one-third of the sphere area: z > radius * (1/3)
         z_thresh = sphere_obj.radius / 3.0
         all_approach_points = np.array([pt for pt in sphere_obj.vertices if pt[2] > z_thresh])
         
-        print("Generating Fibonacci sphere visualization (200 points)...")
+        print(f"Generating Fibonacci sphere visualization ({num_samples} points)...")
         sphere_obj.visualise()
         pause(TICK_RATE)
         
         results = []
-        print("Sphere visualized. Starting 200 RANDOM grasp tests...")
+        print(f"Sphere visualized. Starting {num_samples} RANDOM grasp tests...")
         pause(2.0 / self.SIMULATION_SPEED if self.SIMULATION_SPEED > 0 else 2.0)
         
         tested_points = set()
         
-        for i in range(200):
+        for i in range(num_samples):
             # PREFER UNTTESTED POINTS FIRST
             available_points = [j for j in range(len(all_approach_points)) if j not in tested_points]
 
@@ -530,18 +552,30 @@ class RoboticArm():
                             textColorRGB=[0, 1, 0], lifeTime=3)
             
             if i % 20 == 0:
-                print(f"Test {i+1}/200 | Point #{random_idx} | Unique: {len(tested_points)}/200")
+                print(f"Test {i+1}/{num_samples} | Point #{random_idx} | Unique: {len(tested_points)}/{num_samples}")
                 
             approach_pos, approach_orn = self.grasp_pose_from_point(pt, current_object_pos)
             self.draw_sphere_point(pt, current_object_pos)
 
+            # Add noise to orientation
+            noisy_orientation = addNoiseToOrientation(
+                approach_orn,
+                roll_noise_range=roll_noise_range,
+                pitch_noise_range=pitch_noise_range,
+                yaw_noise_range=yaw_noise_range
+            )
+
             # Compute a distant start pose located at the sampled sphere point
             # `pt` is already scaled by the sphere radius in `FibonacciSphere.vertices`
             start_pos = current_object_pos + np.array(pt)
-            start_orn = approach_orn
+            start_orn = noisy_orientation
+
+            # Add uniform random noise to grasp offset
+            original_grasp_offset = object_id.grasp_offset
+            noisy_grasp_offset = addNoiseToOffset(original_grasp_offset, offset_noise_range=offset_noise_range)
 
             success = self.do_grasp_and_evaluate(robot_id, gripper_joints, ee_link_idx,
-                            start_pos, start_orn, approach_pos, approach_orn, object_id)
+                            start_pos, start_orn, approach_pos, noisy_orientation, object_id, grasp_offset=noisy_grasp_offset)
             
             # EXTRACT FEATURES EXACTLY LIKE sampling.py
             # Get actual end-effector orientation after grasp (matches gripper.getOrientation)
@@ -556,16 +590,13 @@ class RoboticArm():
             if approach_distance > 0:
                 approach_direction = approach_direction / approach_distance
             
-            # Grasp offset: currently center grasp (can extend later)
-            grasp_offset = np.array([0.0, 0.0, 0.0])
-            
             results.append({
                 "orientation_roll": float(roll),
                 "orientation_pitch": float(pitch),
                 "orientation_yaw": float(yaw),
-                "offset_x": float(grasp_offset[0]),
-                "offset_y": float(grasp_offset[1]),
-                "offset_z": float(grasp_offset[2]),
+                "offset_x": float(noisy_grasp_offset[0]),
+                "offset_y": float(noisy_grasp_offset[1]),
+                "offset_z": float(noisy_grasp_offset[2]),
                 "approach_dir_x": float(approach_direction[0]),
                 "approach_dir_y": float(approach_direction[1]),
                 "approach_dir_z": float(approach_direction[2]),
@@ -574,8 +605,8 @@ class RoboticArm():
                 "object_type": object_type
             })
             
-            # Reset object to starting position and zero velocity
-            p.resetBasePositionAndOrientation(object_id.id, object_start_pos, [0, 0, 0, 1])
+            # Reset object to starting position and orientation
+            p.resetBasePositionAndOrientation(object_id.id, object_start_pos, object_orientation)
             p.resetBaseVelocity(object_id.id, [0, 0, 0], [0, 0, 0])
             self.reset_arm_pose(robot_id)
             pause(0.1 / self.SIMULATION_SPEED if self.SIMULATION_SPEED > 0 else 0.1)
@@ -589,7 +620,7 @@ class RoboticArm():
         print(f"Total tests: {total_tests}")
         print(f"Successful grasps: {successes}")
         print(f"Success rate: {success_rate:.1f}%")
-        print(f"Unique points tested: {len(tested_points)}/200")
+        print(f"Unique points tested: {len(tested_points)}/{num_samples}")
         
         # SAVE TO FIXED CSV WITH PANDAS
         self.save_to_csv(results)

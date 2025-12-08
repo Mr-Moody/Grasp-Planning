@@ -12,7 +12,7 @@ from Grippers.TwoFingerGripper import TwoFingerGripper
 from Grippers.RoboticArm import RoboticArm
 from Object.Objects import Box, Cylinder, Duck
 from Planning.Sphere import FibonacciSphere
-from util import drawGizmo, setupEnvironment, pause
+from util import drawGizmo, setupEnvironment, pause, addNoiseToOrientation, addNoiseToOffset
 from constants import TIME, TICK_RATE, NUM_TICKS
 
 def extractFeatures(gripper, object, approach_vertex, grasp_offset):
@@ -57,52 +57,6 @@ def extractFeatures(gripper, object, approach_vertex, grasp_offset):
     }
     
     return features
-
-def addNoiseToOrientation(orientation_quat, roll_noise_range=0.1, pitch_noise_range=0.1, yaw_noise_range=0.1):
-    """
-    Add uniform random noise to orientation angles (roll, pitch, yaw).
-    
-    Args:
-        orientation_quat: Quaternion orientation [x, y, z, w]
-        roll_noise_range: Range for roll noise (in radians). Noise will be uniformly distributed in [-range/2, range/2]
-        pitch_noise_range: Range for pitch noise (in radians). Noise will be uniformly distributed in [-range/2, range/2]
-        yaw_noise_range: Range for yaw noise (in radians). Noise will be uniformly distributed in [-range/2, range/2]
-    
-    Returns:
-        np.array: Noisy quaternion orientation [x, y, z, w]
-    """
-    # Convert quaternion to Euler angles
-    rotation = R.from_quat(orientation_quat)
-    euler_angles = rotation.as_euler("xyz")  # roll, pitch, yaw
-    
-    # Add uniform random noise in range [-range/2, range/2]
-    noisy_euler = euler_angles + np.array([
-        np.random.uniform(-roll_noise_range/2, roll_noise_range/2),
-        np.random.uniform(-pitch_noise_range/2, pitch_noise_range/2),
-        np.random.uniform(-yaw_noise_range/2, yaw_noise_range/2)
-    ])
-    
-    # Convert back to quaternion
-    noisy_rotation = R.from_euler("xyz", noisy_euler)
-    noisy_quat = noisy_rotation.as_quat(canonical=True)
-    
-    return noisy_quat
-
-def addNoiseToOffset(grasp_offset, offset_noise_range=0.005):
-    """
-    Add uniform random noise to grasp offset.
-    
-    Args:
-        grasp_offset: Original grasp offset [x, y, z] in meters
-        offset_noise_range: Range for offset noise (in meters). Noise will be uniformly distributed in [-range/2, range/2] for each axis
-    
-    Returns:
-        np.array: Noisy grasp offset [x, y, z]
-    """
-    noise = np.random.uniform(-offset_noise_range/2, offset_noise_range/2, size=3)
-    noisy_offset = np.array(grasp_offset) + noise
-
-    return noisy_offset
 
 def checkGraspSuccess(object, initial_object_pos, threshold=0.15):
     """
@@ -242,6 +196,12 @@ def main(num_samples:int=500, gripper_type:str="TwoFingerGripper", object_type:s
             for _ in range(50):
                 p.stepSimulation()
             
+            # Duck needs to be rotated by 90 degrees around the x-axis
+            if object_type == "Duck":
+                duck_orientation = p.getQuaternionFromEuler([np.pi/2, 0, 0])
+                current_position = object.getPosition()
+                object.setPosition(new_position=current_position, new_orientation=duck_orientation)
+            
             target = object.getPosition()
             orientation = gripper.orientationToTarget(target)
             
@@ -274,7 +234,7 @@ def main(num_samples:int=500, gripper_type:str="TwoFingerGripper", object_type:s
             sample = {
                 "features": features,
                 "label": 1 if success else 0,
-                "object_type": "Box",
+                "object_type": object_type,
                 "approach_vertex": v.tolist(),
                 "grasp_offset": noisy_grasp_offset.tolist()
             }
@@ -285,7 +245,7 @@ def main(num_samples:int=500, gripper_type:str="TwoFingerGripper", object_type:s
             object.unload()
 
         # Save data after all samples collected
-        saveGraspData(grasp_data, gripper_type, "Box")
+        saveGraspData(grasp_data, gripper_type, object_type)
         
         s.removeVisualisation()
 
@@ -294,7 +254,7 @@ def main(num_samples:int=500, gripper_type:str="TwoFingerGripper", object_type:s
         arm = RoboticArm()
         
         # Call the robotic arm sampling method
-        arm.robotic_arm_grasp_sampling(object_type, gui=gui)
+        arm.robotic_arm_grasp_sampling(object_type=object_type, gui=gui, num_samples=num_samples)
         
         print("RoboticArm sampling completed. Data saved by RoboticArm class.")
 

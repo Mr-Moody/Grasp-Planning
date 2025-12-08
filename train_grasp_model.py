@@ -10,7 +10,7 @@ from scipy.stats import randint, uniform
 import joblib
 import os
 
-def loadGraspData(data_file="Samples/grasp_data.csv"):
+def loadGraspData(data_file:str="Samples/grasp_data.csv"):
     """
     Load grasp data from CSV file.
     
