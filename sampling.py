@@ -197,7 +197,7 @@ def saveGraspData(grasp_data, gripper_type, object_type="Box"):
     
     return output_file
 
-def main(gripper_type:str="TwoFingerGripper", object_type:str="Box"):
+def main(gripper_type:str="TwoFingerGripper", object_type:str="Box", gui:bool=False):
 
     if gripper_type == "TwoFingerGripper":
         grasp_data = []
@@ -208,12 +208,12 @@ def main(gripper_type:str="TwoFingerGripper", object_type:str="Box"):
         yaw_noise_range = 1
         offset_noise_range = 0.06
 
-        plane_id = setupEnvironment(gui=False)
+        plane_id = setupEnvironment(gui=gui)
         gripper_start = np.array([0,0,1])
         object_start = np.array([0,0,0.06])
 
         s = FibonacciSphere(samples=1000, radius=0.6, cone_angle=math.pi)
-        #s.visualise()
+        s.visualise()
         p.stepSimulation()
 
         print(f"Sampling {len(s.vertices)} vertices using {gripper_type}")
@@ -224,7 +224,16 @@ def main(gripper_type:str="TwoFingerGripper", object_type:str="Box"):
 
             # Initialise gripper and object
             gripper = TwoFingerGripper(position=v)
-            object = Box(position=object_start)
+
+            if object_type == "Box":
+                object = Box(position=object_start)
+            elif object_type == "Cylinder":
+                object = Cylinder(position=object_start)
+            elif object_type == "Duck":
+                object = Duck(position=object_start)
+            else:
+                print(f"Unknown object type: {object_type}")
+                continue
             
             gripper.load()
             object.load()
@@ -285,7 +294,7 @@ def main(gripper_type:str="TwoFingerGripper", object_type:str="Box"):
         arm = RoboticArm()
         
         # Call the robotic arm sampling method
-        arm.robotic_arm_grasp_sampling(object_type)
+        arm.robotic_arm_grasp_sampling(object_type, gui=gui)
         
         print("RoboticArm sampling completed. Data saved by RoboticArm class.")
 
@@ -297,4 +306,4 @@ def main(gripper_type:str="TwoFingerGripper", object_type:str="Box"):
 
 
 if __name__ == "__main__":
-    main(gripper_type="RoboticArm", object_type="Box")
+    main(gripper_type="RoboticArm", object_type="Box", gui=False)

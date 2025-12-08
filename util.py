@@ -24,9 +24,18 @@ def setupEnvironment(gui:Optional[bool]=None):
         else:
             p.connect(p.DIRECT)
 
-    
     p.resetSimulation()
     p.setAdditionalSearchPath(pybullet_data.getDataPath())
+    
+    # Load plane.urdf before adding Models path to avoid search path conflicts
+    plane_urdf_path = os.path.join(pybullet_data.getDataPath(), "plane.urdf")
+    plane_id = p.loadURDF(plane_urdf_path)
+    
+    # Add Models path - use absolute path to avoid issues with spaces in path
+    model_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "Models"))
+    if os.path.exists(model_path) and os.path.isdir(model_path):
+        p.setAdditionalSearchPath(model_path)
+    
     p.setRealTimeSimulation(0)
     p.setGravity(0, 0, -9.81)
     
@@ -37,9 +46,6 @@ def setupEnvironment(gui:Optional[bool]=None):
     #     enableConeFriction=1,  # Enable cone friction for more realistic contacts
     #     restitutionVelocityThreshold=0.01  # Lower threshold to reduce bouncing
     # )
-
-    # Create floor plane
-    plane_id = p.loadURDF("plane.urdf")
 
     return plane_id
 

@@ -1,6 +1,8 @@
 import pybullet as p
+import pybullet_data
 import numpy as np
 import time
+import os
 from typing import Optional
 from scipy.spatial.transform import Rotation as R, Slerp
 
@@ -55,7 +57,25 @@ class GameObject():
         """
         Load the GameObject into the simulation.
         """
-        self.__id = p.loadURDF(self.__urdf_file, list(self.__position), list(self.__orientation))
+        # Resolve URDF path - check pybullet_data first, then Models folder, then use as-is
+        urdf_path = self.__urdf_file
+        if not os.path.isabs(urdf_path):
+            # Check if file exists in pybullet_data
+            pybullet_urdf_path = os.path.join(pybullet_data.getDataPath(), self.__urdf_file)
+            if os.path.exists(pybullet_urdf_path):
+                urdf_path = pybullet_urdf_path
+            else:
+                # Check if file exists in Models folder
+                # GameObject.py is in Object/, so go up one level to get project root
+                current_file_dir = os.path.dirname(os.path.abspath(__file__))
+                project_root = os.path.dirname(current_file_dir)
+                model_path = os.path.join(project_root, "Models")
+                models_urdf_path = os.path.join(model_path, self.__urdf_file)
+                if os.path.exists(models_urdf_path):
+                    urdf_path = os.path.abspath(models_urdf_path)
+                # Otherwise, let pybullet search in additional search paths
+        
+        self.__id = p.loadURDF(urdf_path, list(self.__position), list(self.__orientation))
         self.name = f"{self.__name}_{self.__id}"
 
 

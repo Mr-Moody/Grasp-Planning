@@ -137,12 +137,12 @@ class RoboticArm():
         # Add settling time after fast moves
         pause(TICK_RATE * 5)
 
-    def draw_sphere_point(self, pt, cube_pos=[0, 0, 0]):
-        """Draw RED line from CUBE CENTER to raw SPHERE POINT"""
-        p.addUserDebugLine(cube_pos, np.array(cube_pos) + pt, 
+    def draw_sphere_point(self, pt, object_pos=[0, 0, 0]):
+        """Draw RED line from OBJECT CENTER to raw SPHERE POINT"""
+        p.addUserDebugLine(object_pos, np.array(object_pos) + pt, 
                         lineColorRGB=[1, 0, 0], lineWidth=5, lifeTime=5)
 
-    def grasp_pose_from_point(self, point, cube_pos, offset=0.05):
+    def grasp_pose_from_point(self, point, object_pos, offset=0.05):
         """Approach the object with gripper oriented along the approach direction vector.
         The gripper's approach axis (x-axis) points along the direction from start to object.
         Fingers close perpendicular to the approach direction.
@@ -150,7 +150,7 @@ class RoboticArm():
         
         Args:
             point: Point on Fibonacci sphere (direction vector from object center to start position)
-            cube_pos: Object center position
+            object_pos: Object center position
             offset: Not used currently, kept for compatibility
         """
         # Calculate approach direction: from sphere point (start) to object center
@@ -163,7 +163,7 @@ class RoboticArm():
         else:
             approach_dir = np.array([0, 0, -1])  # Default downward if point is at origin
         
-        approach_pos = np.array(cube_pos)
+        approach_pos = np.array(object_pos)
         
         # Gripper orientation for Panda gripper:
         # For Panda gripper, the Z-axis points forward (outward from gripper)
@@ -286,7 +286,7 @@ class RoboticArm():
         
         return roll, pitch, yaw
 
-    def wait_for_end_effector(self, robot_id, ee_link_idx, target_pos, target_orn, pos_tol=0.005, orn_tol=0.03, timeout=2.0):
+    def wait_for_end_effector(self, robot_id, ee_link_idx, target_pos, target_orn, pos_tol=0.005, orn_tol=0.03, timeout=5.0):
         """Step simulation until end-effector reaches target pose within tolerances.
         Returns True if reached, False if timed out.
         pos_tol: meters (tighter tolerance), orn_tol: quaternion L2 norm approx.
@@ -350,7 +350,7 @@ class RoboticArm():
 
 
     def do_grasp_and_evaluate(self, robot_id, gripper_joints, ee_link_idx,
-                            start_pos, start_orn, approach_pos, approach_orn, cube_id):
+                            start_pos, start_orn, approach_pos, approach_orn, object):
         """
         Move to a start pose (sampled sphere point), then approach the object,
         close the gripper and lift. Returns True on successful lift.
@@ -362,8 +362,8 @@ class RoboticArm():
         self.move_to_pose_fast(robot_id, ee_link_idx, start_pos, start_orn)
 
         # Compute a grasp center (slightly above center) and a pre-approach point along the approach direction
-        cube_pos, _ = p.getBasePositionAndOrientation(cube_id)
-        grasp_center = np.array(cube_pos) + np.array([0, 0, self.GRASP_Z_OFFSET])
+        object_pos, _ = object.getPositionAndOrientation()
+        grasp_center = np.array(object_pos) + np.array([0, 0, self.GRASP_Z_OFFSET])
 
         # pre-approach: start from further away along -approach_dir so fingers go around object
         approach_dir = np.array(grasp_center) - (np.array(start_pos))
@@ -414,13 +414,8 @@ class RoboticArm():
         pause(TICK_RATE * 20)  # Increased from 12 for better grip establishment
 
         # Check contact points between gripper and object to verify a grip
-        contacts = p.getContactPoints(bodyA=cube_id, bodyB=robot_id)
+        contacts = p.getContactPoints(bodyA=object.id, bodyB=robot_id)
         contact_count = len(contacts)
-
-        if contact_count == 0:
-            print("Warning: no contacts detected between gripper and object after close")
-        else:
-            print(f"Info: detected {contact_count} contact points between gripper and object")
 
         # LIFT: compute lift target from the CURRENT end-effector pose (more robust)
         ee_state = p.getLinkState(robot_id, ee_link_idx)
@@ -431,21 +426,16 @@ class RoboticArm():
         # After lift, check object position and whether contacts persist
         pause(TICK_RATE * 6)
 
-        cube_pos, _ = p.getBasePositionAndOrientation(cube_id)
-        post_contacts = p.getContactPoints(bodyA=cube_id, bodyB=robot_id)
+        object_pos, _ = object.getPositionAndOrientation()
+        post_contacts = p.getContactPoints(bodyA=object.id, bodyB=robot_id)
         post_contact_count = len(post_contacts)
 
         # Relaxed success criteria: object lifted above ~8cm and within ~8cm laterally OR persistent contact
-        height_ok = cube_pos[2] > 0.08
-        lateral_ok = np.linalg.norm(np.array(cube_pos[:2]) - np.array(lift_pos[:2])) < 0.08
+        height_ok = object_pos[2] > 0.08
+        lateral_ok = np.linalg.norm(np.array(object_pos[:2]) - np.array(lift_pos[:2])) < 0.08
         attached_ok = post_contact_count > 0 or contact_count > 0
 
         success = (height_ok and lateral_ok) or attached_ok
-
-        if success:
-            print(f"Grasp likely SUCCESS: z={cube_pos[2]:.3f}, lateral_err={(np.linalg.norm(np.array(cube_pos[:2]) - np.array(lift_pos[:2]))):.3f}, contacts_before={contact_count}, contacts_after={post_contact_count}")
-        else:
-            print(f"Grasp likely FAIL: z={cube_pos[2]:.3f}, lateral_err={(np.linalg.norm(np.array(cube_pos[:2]) - np.array(lift_pos[:2]))):.3f}, contacts_before={contact_count}, contacts_after={post_contact_count}")
 
         return success
 
@@ -470,23 +460,42 @@ class RoboticArm():
         print(f"Success rate: {df['label'].mean():.1%}")
         
 
-    def robotic_arm_grasp_sampling(self, object_type:str="Box"):
-        setupEnvironment(gui=True)
+    def robotic_arm_grasp_sampling(self, object_type:str="Box", gui:bool=True):
+        setupEnvironment(gui=gui)
 
         robot_id, gripper_joints = self.load_panda()
         gripper_joints = self.get_gripper_indices(robot_id)
         self.reset_arm_pose(robot_id)
         
         ee_link_idx = 11
-        cube_start_pos = [0, 0, 0]
-        cube_id = p.loadURDF("cube_small.urdf", cube_start_pos)
+        # Place object at origin [0, 0, 0]
+        object_start_pos = np.array([0, 0, 0.06])
+
+        if object_type == "Box":
+            object_id = Box(position=object_start_pos)
+        elif object_type == "Cylinder":
+            object_id = Cylinder(position=object_start_pos)
+        elif object_type == "Duck":
+            object_id = Duck(position=object_start_pos)
+        else:
+            print(f"Unknown object type: {object_type}")
+            return
+
+        # Load the object into the simulation
+        object_id.load()
+        # Let object settle
+        for _ in range(50):
+            p.stepSimulation()
+        
+        # Get the actual object position after settling
+        object_start_pos, _ = object_id.getPositionAndOrientation()
+        object_start_pos = list(object_start_pos)
 
         sphere_obj = FibonacciSphere(samples=200, radius=0.20)
 
         # Restrict to the top one-third of the sphere area: z > radius * (1/3)
         z_thresh = sphere_obj.radius / 3.0
         all_approach_points = np.array([pt for pt in sphere_obj.vertices if pt[2] > z_thresh])
-        fixed_cube_pos = [0, 0, 0]
         
         print("Generating Fibonacci sphere visualization (200 points)...")
         sphere_obj.visualise()
@@ -510,25 +519,29 @@ class RoboticArm():
             
             pt = all_approach_points[random_idx]
             
+            # Get current object position (may have shifted)
+            current_object_pos, _ = object_id.getPositionAndOrientation()
+            current_object_pos = np.array(current_object_pos)
+            
             # VISUAL FEEDBACK: THICK GREEN LINE to current test point
-            p.addUserDebugLine(fixed_cube_pos, np.array(fixed_cube_pos) + pt, 
+            p.addUserDebugLine(current_object_pos, current_object_pos + pt, 
                             lineColorRGB=[0, 1, 0], lineWidth=8, lifeTime=3)
-            p.addUserDebugText(f"P{random_idx}", np.array(fixed_cube_pos) + pt, 
+            p.addUserDebugText(f"P{random_idx}", current_object_pos + pt, 
                             textColorRGB=[0, 1, 0], lifeTime=3)
             
             if i % 20 == 0:
                 print(f"Test {i+1}/200 | Point #{random_idx} | Unique: {len(tested_points)}/200")
                 
-            approach_pos, approach_orn = self.grasp_pose_from_point(pt, fixed_cube_pos)
-            self.draw_sphere_point(pt, fixed_cube_pos)
+            approach_pos, approach_orn = self.grasp_pose_from_point(pt, current_object_pos)
+            self.draw_sphere_point(pt, current_object_pos)
 
             # Compute a distant start pose located at the sampled sphere point
             # `pt` is already scaled by the sphere radius in `FibonacciSphere.vertices`
-            start_pos = np.array(fixed_cube_pos) + np.array(pt)
+            start_pos = current_object_pos + np.array(pt)
             start_orn = approach_orn
 
             success = self.do_grasp_and_evaluate(robot_id, gripper_joints, ee_link_idx,
-                            start_pos, start_orn, approach_pos, approach_orn, cube_id)
+                            start_pos, start_orn, approach_pos, approach_orn, object_id)
             
             # EXTRACT FEATURES EXACTLY LIKE sampling.py
             # Get actual end-effector orientation after grasp (matches gripper.getOrientation)
@@ -537,9 +550,8 @@ class RoboticArm():
             roll, pitch, yaw = self.quaternion_to_euler(ee_quat)
             
             # Approach direction and distance (matches sampling.py: approachvertex - objectpos)
-            object_pos = np.array(fixed_cube_pos)
             approach_vertex = pt  # sphere point relative to object center
-            approach_direction = approach_vertex - object_pos
+            approach_direction = approach_vertex - np.array([0, 0, 0])  # relative to object center
             approach_distance = np.linalg.norm(approach_direction)
             if approach_distance > 0:
                 approach_direction = approach_direction / approach_distance
@@ -559,10 +571,12 @@ class RoboticArm():
                 "approach_dir_z": float(approach_direction[2]),
                 "approach_distance": float(approach_distance),
                 "label": 1 if success else 0,
-                "object_type": "Box"
+                "object_type": object_type
             })
             
-            p.resetBasePositionAndOrientation(cube_id, fixed_cube_pos, [0, 0, 0, 1])
+            # Reset object to starting position and zero velocity
+            p.resetBasePositionAndOrientation(object_id.id, object_start_pos, [0, 0, 0, 1])
+            p.resetBaseVelocity(object_id.id, [0, 0, 0], [0, 0, 0])
             self.reset_arm_pose(robot_id)
             pause(0.1 / self.SIMULATION_SPEED if self.SIMULATION_SPEED > 0 else 0.1)
         

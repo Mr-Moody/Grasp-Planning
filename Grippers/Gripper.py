@@ -1,9 +1,11 @@
 import pybullet as p
+import pybullet_data
 import numpy as np
 from scipy.spatial.transform import Rotation as R, Slerp
 from abc import ABC, abstractmethod
 from typing import Optional
 import time
+import os
 from constants import GUI
 
 from Object.GameObject import GameObject
@@ -21,7 +23,16 @@ class Gripper():
 
     def load(self):
         """Load gripper into the PyBullet world."""
-        self.id = p.loadURDF(self.urdf_file, *self.position)
+        # Resolve URDF path - check pybullet_data first, then use as-is
+        urdf_path = self.urdf_file
+        if not os.path.isabs(urdf_path):
+            # Check if file exists in pybullet_data
+            pybullet_urdf_path = os.path.join(pybullet_data.getDataPath(), self.urdf_file)
+            if os.path.exists(pybullet_urdf_path):
+                urdf_path = pybullet_urdf_path
+            # Otherwise, let pybullet search in additional search paths
+        
+        self.id = p.loadURDF(urdf_path, *self.position)
 
         # Set moderate damping to reduce oscillation while allowing smooth movement
         p.changeDynamics(self.id, -1, linearDamping=0.5, angularDamping=0.5)
