@@ -1,6 +1,7 @@
-# Grasp Planning System
+# Grasp Planning
+Group 7 - Thomas Moody, Andrew Lau
 
-A machine learning-based grasp planning system that generates training data through physics simulation, trains a classifier to predict successful grasps, and uses optimisation to find optimal grasp configurations for robotic manipulation.
+A machine learning grasp planning system that generates training data through physics simulation, trains a classifier to predict successful grasps, and uses optimisation to find optimal grasp configurations for robotic manipulation.
 
 ## Overview
 
@@ -35,12 +36,11 @@ Generates grasp dataset by sampling different grasp configurations in a physics 
 
 **Arguments:**
 - `--num_samples` (int, default: 150): Number of samples to generate
-  - Note: For TwoFingerGripper, this may not directly control the number of samples as it uses FibonacciSphere sampling
 - `--gripper_type` (str, default: "TwoFingerGripper"): Type of gripper
   - Options: `TwoFingerGripper`, `RoboticArm`
 - `--object_type` (str, default: "Box"): Type of object to grasp
   - Options: `Box`, `Cylinder`, `Duck`
-- `--gui` (flag): Enable GUI visualisation during simulation
+- `--gui`: Enable GUI visualisation during simulation
 
 **Examples:**
 ```bash
@@ -86,7 +86,6 @@ Tests the planner by finding the best grasp configuration for a given object pos
   - Format: `"(min_x,max_x),(min_y,max_y),(min_z,max_z)"`
 - `--offset_bounds` (str, default: "(-0.1,0.1),(-0.1,0.1),(-0.05,0.1)"): Bounds for grasp offset
   - Format: `"(min_x,max_x),(min_y,max_y),(min_z,max_z)"`
-- `--gui` (flag): Enable GUI visualisation during testing
 
 **Examples:**
 ```bash
@@ -111,10 +110,10 @@ Visualises grasp success/failure data from a CSV file in 3D space.
 
 **Examples:**
 ```bash
-# Visualize a specific data file
+# Visualise a specific data file
 python main.py --mode visualise --csv_file Samples/TwoFingerGripper_Box_20251208_150831.csv
 
-# Visualize using just filename (searches in Samples directory)
+# Visualise using just filename (searches in Samples directory)
 python main.py --mode visualise --csv_file TwoFingerGripper_Box_20251208_150831.csv
 ```
 
@@ -132,7 +131,7 @@ python main.py --mode train_classifier
 # Step 3: Test the planner to find best grasp
 python main.py --mode test_planner --object_x 1.0 --object_y 0.0 --object_z 0.06
 
-# Step 4: Visualize the generated data
+# Step 4: Visualise the generated data
 python main.py --mode visualise --csv_file Samples/TwoFingerGripper_Box_20251208_150831.csv
 ```
 
