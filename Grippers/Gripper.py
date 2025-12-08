@@ -102,7 +102,7 @@ class Gripper():
         
         
     
-    def setPosition(self, new_position:np.ndarray=None, new_orientation:np.ndarray=None) -> None:
+    def setPosition(self, new_position:Optional[np.ndarray]=None, new_orientation:Optional[np.ndarray]=None) -> None:
         """
         Move object to new position and orientation.
         """

@@ -2,6 +2,7 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
+from typing import cast
 import os
 
 CSV_FILE = os.path.join("Samples", "TwoFingerGripper_Box_20251208_150831.csv")  # <- Edit this line
@@ -29,7 +30,7 @@ arrow_length = 0.075
 
 # Create 3D plot
 fig = plt.figure(figsize=(12, 10))
-ax = fig.add_subplot(111, projection='3d')
+ax = cast(Axes3D, fig.add_subplot(111, projection='3d'))
 
 # Plot green arrows for success (thicker, more opaque)
 for i in range(len(success)):
@@ -66,7 +67,7 @@ for i in range(len(fail)):
               color="red", alpha=0.4, linewidth=0.8, arrow_length_ratio=0.1)
 
 # Mark object center
-ax.scatter([0], [0], [0], color="blue", s=100, marker="o", label="Object Center")
+ax.scatter(0, 0, 0, color="blue", s=100, marker="o", label="Object Center")
 
 # Labels and styling
 ax.set_xlabel("X (m)")
