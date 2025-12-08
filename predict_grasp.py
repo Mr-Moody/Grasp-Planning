@@ -7,7 +7,7 @@ import os
 from scipy.spatial.transform import Rotation as R
 from scipy.optimize import differential_evolution
 from train_grasp_model import loadModel, predictGrasp
-from Object.Gripper import Gripper
+from Grippers.Gripper import Gripper
 from util import setupEnvironment
 
 # Process-local model cache for multiprocessing
@@ -266,7 +266,7 @@ def findBestGrasp(gripper: Gripper, object_pos: np.ndarray,
     return best_grasp
 
 def testGraspPrediction():
-    from Object.TwoFingerGripper import TwoFingerGripper
+    from Grippers.TwoFingerGripper import TwoFingerGripper
     
     gripper = TwoFingerGripper()
     object_pos = np.array([1, 0, 0.06])
@@ -286,7 +286,7 @@ def testGraspPrediction():
         print("Could not make prediction. Please train the model first.")
 
 def testFindBestGrasp():
-    from Object.TwoFingerGripper import TwoFingerGripper
+    from Grippers.TwoFingerGripper import TwoFingerGripper
 
     gripper = TwoFingerGripper()
     object_pos = np.array([1, 0, 0.06])
@@ -315,6 +315,6 @@ def testFindBestGrasp():
 
 if __name__ == "__main__":
     setupEnvironment(gui=False)
-    #testGraspPrediction()
-    testFindBestGrasp()
+    testGraspPrediction()
+    #testFindBestGrasp()
 

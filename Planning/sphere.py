@@ -53,5 +53,11 @@ class FibonacciSphere():
             self.gizmos.append(drawGizmo(v))
 
     def removeVisualisation(self) -> None:
+        if self.gizmos is None:
+            return
+
+        if len(self.gizmos) < 1:
+            return
+
         for gizmo_id in self.gizmos:
             removeGizmo(gizmo_id)

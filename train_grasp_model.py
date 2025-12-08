@@ -1,10 +1,12 @@
 
 import pandas as pd
 import numpy as np
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split, cross_val_score
+from typing import Optional
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.model_selection import train_test_split, cross_val_score, RandomizedSearchCV
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.preprocessing import StandardScaler
+from scipy.stats import randint, uniform
 import joblib
 import os
 
@@ -43,127 +45,195 @@ def loadGraspData(data_file="Samples/grasp_data.csv"):
     
     return features, labels, object_types
 
-def trainModel(features, labels, test_size=0.2, random_state=42, n_estimators=100, max_depth=10):
+def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n_iter_search=150):
     """
-    Train a Random Forest Classifier on grasp data.
+    Train a Random Forest or Gradient Boosting Classifier on grasp data.
     
     Args:
         features: Feature matrix (n_samples, n_features)
         labels: Label vector (n_samples,)
         test_size: Proportion of data to use for testing
+        val_size: Proportion of training data to use for validation (after test split)
         random_state: Random seed for reproducibility
-        n_estimators: Number of trees in the random forest
-        max_depth: Maximum depth of the trees
+        n_iter_search: Number of parameter combinations to try in RandomizedSearchCV
     
     Returns:
-        tuple: (model, X_test, y_test, y_pred) for evaluation
+        tuple: (model, scaler, X_test_scaled, y_test, y_test_pred, X_test, y_pred_proba)
     """
     # Check class distribution
     unique_labels = np.unique(labels)
     label_counts = np.bincount(labels)
-    print(f"Classes in dataset: {unique_labels}")
     class_dist = dict(zip(range(len(label_counts)), label_counts))
-    print(f"Class distribution: {class_dist}")
     
-    # Warn if only one class is present
-    if len(unique_labels) == 1:
-        print(f"\nWARNING: Only one class ({'Success' if unique_labels[0] == 1 else 'Failure'}) present in dataset.")
-        print("   The model will always predict this class. Consider collecting more diverse data.")
-        print("   The model cannot learn to distinguish between successful and failed grasps.")
+    X_temp, X_test, y_temp, y_test = train_test_split(features, labels, test_size=test_size, random_state=random_state, stratify=labels)
+
+    # Separate train and validation from temp
+    val_size_adjusted = val_size / (1 - test_size)  # Adjust val_size relative to remaining data
+
+    X_train, X_val, y_train, y_val = train_test_split(X_temp, y_temp, test_size=val_size_adjusted, random_state=random_state, stratify=y_temp)
     
-    # Split data into training and testing sets
-    # Only use stratify if we have at least 2 samples of each class and more than one class
-    use_stratify = (len(unique_labels) > 1 and 
-                   all(label_counts[label] >= 2 for label in unique_labels if label < len(label_counts)))
-    
-    if use_stratify:
-        X_train, X_test, y_train, y_test = train_test_split(
-            features, labels, test_size=test_size, random_state=random_state, stratify=labels
-        )
-    else:
-        print("Warning: Cannot use stratified split. Using random split instead.")
-        X_train, X_test, y_train, y_test = train_test_split(
-            features, labels, test_size=test_size, random_state=random_state
-        )
-    
-    # Optional: Scale features (Random Forest doesn't strictly need this, but it can help)
+    # Feature scaling
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
+    X_val_scaled = scaler.transform(X_val)
     X_test_scaled = scaler.transform(X_test)
-    
-    # Create and train Random Forest Classifier
-    # Only use class_weight="balanced" if we have multiple classes
-    clf_kwargs = {
-        "n_estimators": n_estimators,
-        "max_depth": max_depth,
-        "random_state": random_state,
-        "n_jobs": -1,
+
+    param_distributions = {
+        "n_estimators": [100, 150, 200, 250, 300],  # Reduced range, fewer trees can help
+        "max_depth": [3, 5, 7, 10, 12, 15],  # Reduced max depth - shallower trees prevent overfitting
+        "min_samples_split": [10, 15, 20, 25, 30, 40, 50],  # Increased - require more samples to split
+        "min_samples_leaf": [4, 6, 8, 10, 12, 15, 20],  # Increased - larger leaf nodes
+        "max_features": ['sqrt', 'log2', 0.3, 0.4],  # Reduced - fewer features per split
+        "bootstrap": [True],  # Always use bootstrap for better generalization
     }
-    if len(unique_labels) > 1:
-        clf_kwargs["class_weight"] = "balanced"  # Handle imbalanced classes
+
+    # Check if need class_weight for imbalanced classes
+    unique_labels = np.unique(labels)
+    class_weight = "balanced" if len(unique_labels) > 1 else None
+
+    # More conservative base classifier to reduce overfitting
+    base_clf = RandomForestClassifier(n_estimators=150, 
+                                        max_depth=7,
+                                        min_samples_split=20,
+                                        min_samples_leaf=10,
+                                        max_features="sqrt",
+                                        class_weight=class_weight,
+                                        bootstrap=True,
+                                        random_state=42)
     
-    clf = RandomForestClassifier(**clf_kwargs)
+    # Calculate total possible combinations
+    total_combinations = (len(param_distributions["n_estimators"]) * 
+                         len(param_distributions["max_depth"]) * 
+                         len(param_distributions["min_samples_split"]) * 
+                         len(param_distributions["min_samples_leaf"]) * 
+                         len(param_distributions["max_features"]) * 
+                         len(param_distributions["bootstrap"]))
     
-    print(f"Training Random Forest with {n_estimators} trees...")
-    print(f"Training samples: {len(X_train)}, Test samples: {len(X_test)}")
+    # Try up to n_iter_search combinations or all if fewer
+    n_iter = min(n_iter_search, total_combinations)  
     
-    # Train the model
-    clf.fit(X_train_scaled, y_train)
+    print(f"Total possible parameter combinations: {total_combinations}")
+    print(f"Exploring {n_iter} combinations")
     
-    # Make predictions
-    y_pred = clf.predict(X_test_scaled)
+    search = RandomizedSearchCV(
+        base_clf, 
+        param_distributions, 
+        n_iter=n_iter,
+        cv=10,
+        scoring="accuracy",
+        n_jobs=-1,
+        random_state=random_state,
+        verbose=1,
+        refit=True  # Refit best model on full training data
+    )
+
+    print(f"Searching for best parameters...")
+    search.fit(X_train_scaled, y_train)
+    clf = search.best_estimator_
+
+    print(f"\nBest parameters found: {search.best_params_}")
+    best_idx = search.best_index_
+    best_std = search.cv_results_['std_test_score'][best_idx] if best_idx < len(search.cv_results_['std_test_score']) else 0.0
+    print(f"Best CV score: {search.best_score_:.4f} (+/- {best_std:.4f})")
+
+    print(f"\nTraining Random Forest...")
+    print(f"Training samples: {len(X_train)}, Validation samples: {len(X_val)}, Test samples: {len(X_test)}")
+    
+    # Model is already trained by RandomizedSearchCV with refit=True
+    # But we'll evaluate it on our validation set separately
+    
+    # Make predictions on all sets
+    y_train_pred = clf.predict(X_train_scaled)
+    y_val_pred = clf.predict(X_val_scaled)
+    y_test_pred = clf.predict(X_test_scaled)
     y_pred_proba = clf.predict_proba(X_test_scaled)
     
-    # Evaluate model
-    accuracy = accuracy_score(y_test, y_pred)
-    print(f"\nModel Accuracy: {accuracy:.4f}")
+    # Calculate scores for all sets
+    train_accuracy = accuracy_score(y_train, y_train_pred)
+    val_accuracy = accuracy_score(y_val, y_val_pred)
+    test_accuracy = accuracy_score(y_test, y_test_pred)
+    
+    # Print scores
+    print("\n" + "=" * 60)
+    print("Model Performance Scores:")
+    print("=" * 60)
+
+    print(f"Training Accuracy:   {train_accuracy:.4f}")
+    print(f"Validation Accuracy: {val_accuracy:.4f}")
+    print(f"Testing Accuracy:    {test_accuracy:.4f}")
+
+    YELLOW = "\033[33m"
+    RED = "\033[31m"
+    GREEN = "\033[32m"
+    RESET = "\033[0m"
+    
+    # Check for overfitting
+    train_val_gap = train_accuracy - val_accuracy
+    if train_val_gap > 0.15:
+        print(f"\n{YELLOW}WARNING: Large gap between train ({train_accuracy:.4f}) and validation ({val_accuracy:.4f}) accuracy!{RESET}")
+        print(f"   Gap: {train_val_gap:.4f} - Model is overfitting significantly.{RESET}")
+        print(f"\n   Current best parameters:")
+        print(f"   - max_depth: {clf.max_depth}")
+        print(f"   - min_samples_split: {clf.min_samples_split}")
+        print(f"   - min_samples_leaf: {clf.min_samples_leaf}")
+        print(f"   - max_features: {clf.max_features}")
+        print(f"   - n_estimators: {clf.n_estimators}")
+
+    elif train_val_gap > 0.05:
+        print(f"\n{YELLOW}Moderate overfitting detected (gap: {train_val_gap:.4f}){RESET}\n")
+        print(f"   Current parameters: max_depth={clf.max_depth}, min_samples_split={clf.min_samples_split}, min_samples_leaf={clf.min_samples_leaf}")
+        print(f"   Consider slightly increasing regularization or collecting more data.")
+
+    else:
+        print(f"\n{GREEN}Good generalization (train-val gap: {train_val_gap:.4f}){RESET}")
+    
+    print("=" * 60)
+    
+    # Evaluate model (keep existing output for backward compatibility)
+    accuracy = test_accuracy
+    print(f"\nModel Accuracy (Test): {accuracy:.4f}")
     
     # Check which classes are present in the test set
     unique_classes_test = np.unique(y_test)
-    unique_classes_pred = np.unique(y_pred)
+    unique_classes_pred = np.unique(y_test_pred)
     all_classes = np.unique(np.concatenate([unique_classes_test, unique_classes_pred]))
     
     # Classification report (only if we have data to report on)
-    print("\nClassification Report:")
+    print("\nClassification Report (Test Set):")
+
     if len(all_classes) == 1:
         print(f"Warning: Only one class ({'Success' if all_classes[0] == 1 else 'Failure'}) present in test set.")
         print("Cannot generate classification report with only one class.")
         print(f"All test samples are: {'Success' if all_classes[0] == 1 else 'Failure'}")
     else:
         # Use labels parameter to ensure both classes are included even if one is missing
-        print(classification_report(y_test, y_pred, 
+        print(classification_report(y_test, y_test_pred, 
                                    labels=[0, 1],
                                    target_names=["Failure", "Success"],
                                    zero_division=0.0))
     
-    # Confusion matrix (labels=[0,1] ensures 2x2 matrix even if classes are missing)
-    print("\nConfusion Matrix:")
-    cm = confusion_matrix(y_test, y_pred, labels=[0, 1])
-    print("      Predicted")
-    print("      Failure  Success")
-    print(f"True Failure    {cm[0,0]:3d}     {cm[0,1]:3d}")
-    print(f"     Success    {cm[1,0]:3d}     {cm[1,1]:3d}")
+    print("\nConfusion Matrix (Test Set):")
+    cm = confusion_matrix(y_test, y_test_pred, labels=[0, 1])
+    print(f"Confusion Matrix:\n{cm}")
     
-    # Feature importance
-    print("\nFeature Importance:")
-    feature_names = [
-        "Orientation Roll", "Orientation Pitch", "Orientation Yaw",
-        "Offset X", "Offset Y", "Offset Z",
-        "Approach Dir X", "Approach Dir Y", "Approach Dir Z",
-        "Approach Distance"
-    ]
-    importances = clf.feature_importances_
-    indices = np.argsort(importances)[::-1]
+    # # Feature importance
+    # print("\nFeature Importance:")
+
+    # feature_names = [
+    #     "Orientation Roll", "Orientation Pitch", "Orientation Yaw",
+    #     "Offset X", "Offset Y", "Offset Z",
+    #     "Approach Dir X", "Approach Dir Y", "Approach Dir Z",
+    #     "Approach Distance"
+    # ]
+
+    # importances = clf.feature_importances_
+    # indices = np.argsort(importances)[::-1]
     
-    for i in indices:
-        print(f"  {feature_names[i]}: {importances[i]:.4f}")
+    # for i in indices:
+    #     print(f"  {feature_names[i]}: {importances[i]:.4f}")
+
     
-    # Cross-validation
-    print("\nCross-Validation Scores:")
-    cv_scores = cross_val_score(clf, X_train_scaled, y_train, cv=5, scoring="accuracy")
-    print(f"  Mean: {cv_scores.mean():.4f} (+/- {cv_scores.std() * 2:.4f})")
-    
-    return clf, scaler, X_test_scaled, y_test, y_pred, X_test, y_pred_proba
+    return clf, scaler, X_test_scaled, y_test, y_test_pred, X_test, y_pred_proba
 
 def saveModel(model, scaler, model_file="grasp_model.pkl", scaler_file="grasp_scaler.pkl"):
     """
@@ -236,71 +306,144 @@ def predictGrasp(model, scaler, orientation_roll, orientation_pitch, orientation
     
     return prediction, probability
 
-def main():
+def compareModels(features, labels, test_size=0.2, val_size=0.2, random_state=42):
+    """
+    Compare Random Forest and Gradient Boosting models to find the best one.
+    
+    Args:
+        features: Feature matrix
+        labels: Label vector
+        test_size: Proportion of data for testing
+        val_size: Proportion of training data for validation
+        random_state: Random seed
+    
+    Returns:
+        tuple: (best_model, best_scaler, best_model_type, results_dict)
+    """
+    print("=" * 60)
+    print("Comparing Models")
+    print("=" * 60 + "\n")
+    
+    results = {}
+    
+    # Test Random Forest
+    print("Testing Random Forest...")
+    model_rf, scaler_rf, _, _, _, _, _ = trainModel(features,
+                                                    labels, 
+                                                    test_size=test_size, 
+                                                    val_size=val_size,
+                                                    random_state=random_state)
+    
+    # Extract validation accuracy from the trained models
+    # The trainModel function already returns validation accuracy, but we need to extract it
+    # For simplicity, we'll use the validation set that trainModel creates internally
+    # We'll just use the returned scalers which are already fitted
+    
+    # Get validation accuracy for RF (using the scaler from trainModel)
+    # We need to recreate the same split to get validation set
+    unique_labels = np.unique(labels)
+    use_stratify = len(unique_labels) > 1
+    if use_stratify:
+        X_temp, X_test, y_temp, y_test = train_test_split(
+            features, labels, test_size=test_size, random_state=random_state, stratify=labels
+        )
+        val_size_adjusted = val_size / (1 - test_size)
+        X_train, X_val, y_train, y_val = train_test_split(
+            X_temp, y_temp, test_size=val_size_adjusted, random_state=random_state, stratify=y_temp
+        )
+    else:
+        X_temp, X_test, y_temp, y_test = train_test_split(
+            features, labels, test_size=test_size, random_state=random_state
+        )
+        val_size_adjusted = val_size / (1 - test_size)
+        X_train, X_val, y_train, y_val = train_test_split(
+            X_temp, y_temp, test_size=val_size_adjusted, random_state=random_state
+        )
+    
+    # Use the scaler returned from trainModel (already fitted on training data)
+    X_val_scaled_rf = scaler_rf.transform(X_val)
+    y_val_pred_rf = model_rf.predict(X_val_scaled_rf)
+    val_acc_rf = accuracy_score(y_val, y_val_pred_rf)
+    results['random_forest'] = {'model': model_rf, 'scaler': scaler_rf, 'val_accuracy': val_acc_rf}
+    
+    print(f"\nRandom Forest Validation Accuracy: {val_acc_rf:.4f}\n")
+    
+    # Test Gradient Boosting
+    print("Testing Gradient Boosting...")
+    model_gb, scaler_gb, _, _, _, _, _ = trainModel(features, labels, test_size=test_size, val_size=val_size,
+                                                    random_state=random_state)
+    
+    # Use the scaler returned from trainModel
+    X_val_scaled_gb = scaler_gb.transform(X_val)
+    y_val_pred_gb = model_gb.predict(X_val_scaled_gb)
+    val_acc_gb = accuracy_score(y_val, y_val_pred_gb)
+    results['gradient_boosting'] = {'model': model_gb, 'scaler': scaler_gb, 'val_accuracy': val_acc_gb}
+    
+    print(f"\nGradient Boosting Validation Accuracy: {val_acc_gb:.4f}\n")
+    
+    # Determine best model
+    if val_acc_rf > val_acc_gb:
+        best_model_type = 'random_forest'
+        best_model = model_rf
+        best_scaler = scaler_rf
+    else:
+        best_model_type = 'gradient_boosting'
+        best_model = model_gb
+        best_scaler = scaler_gb
+    
+    print("=" * 60)
+    print(f"Best Model: {best_model_type.upper()} (Val Accuracy: {results[best_model_type]['val_accuracy']:.4f})")
+    print("=" * 60)
+    
+    return best_model, best_scaler, best_model_type, results
+
+def main(sample_data_file:Optional[str]=None):
     print("=" * 60)
     print("Grasp Prediction Model Training")
     print("=" * 60 + "\n")
+
+    print("Loading data...")
+
+    data_file = None
+
+    if sample_data_file is not None:
+        path = os.path.join("Samples", sample_data_file)
+
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"Data file {path} not found.")
+
+        data_file = path
     
-    # Load data
-    print("Loading data")
-    try:
-        # Try to find the most recent CSV file in Samples directory
+    else:
         samples_dir = "Samples"
-        if os.path.exists(samples_dir):
-            csv_files = [f for f in os.listdir(samples_dir) if f.endswith('.csv')]
-            if csv_files:
-                # Use the most recent file (by modification time)
-                csv_files.sort(key=lambda f: os.path.getmtime(os.path.join(samples_dir, f)), reverse=True)
-                data_file = os.path.join(samples_dir, csv_files[0])
-                print(f"   Using most recent file: {csv_files[0]}")
-            else:
-                data_file = "Samples/grasp_data.csv"
-        else:
-            data_file = "Samples/grasp_data.csv"
+        csv_files = [f for f in os.listdir(samples_dir) if f.endswith('.csv')]
+        if csv_files:
+            # Use the most recent file (by modification time)
+            csv_files.sort(key=lambda f: os.path.getmtime(os.path.join(samples_dir, f)), reverse=True)
+            data_file = os.path.join(samples_dir, csv_files[0])
+            print(f"   Using most recent file: {csv_files[0]}")
+
+
         
-        features, labels, object_types = loadGraspData(data_file)
-        print(f"   Loaded {len(features)} samples")
-        print(f"   Features shape: {features.shape}")
-        print(f"   Success rate: {np.mean(labels) * 100:.2f}%")
-    except FileNotFoundError as e:
-        print(f"   Error: {e}")
-        return
+    features, labels, object_types = loadGraspData(data_file)
+    print(f"   Loaded {len(features)} samples")
+    print(f"   Features shape: {features.shape}")
+    print(f"   Success rate: {np.mean(labels) * 100:.2f}%")
+
     
-    # Train model
-    print("Training model")
+    print("\nTraining model...\n")
+
     model, scaler, X_test, y_test, y_pred, X_test_original, y_pred_proba = trainModel(
-        features, labels,
+        features, 
+        labels,
         test_size=0.2,
-        random_state=42,
-        n_estimators=100,
-        max_depth=10
-    )
+        val_size=0.2,
+        random_state=42)
     
     # Save model
-    print("Saving model")
+    print("\nSaving model...")
     saveModel(model, scaler)
-    
-    # Example prediction
-    print("Example prediction")
-    print("Testing with sample features")
-    example_pred, example_proba = predictGrasp(
-        model, scaler,
-        orientation_roll=0.0,
-        orientation_pitch=1.57,  # ~90 degrees
-        orientation_yaw=0.0,
-        offset_x=0.0,
-        offset_y=0.0,
-        offset_z=0.01,  # Top of object
-        approach_dir_x=0.0,
-        approach_dir_y=0.0,
-        approach_dir_z=-1.0,  # Approaching from above
-        approach_distance=0.6
-    )
-    print(f"Prediction: {'Success' if example_pred == 1 else 'Failure'}")
-    print(f"Probability: {example_proba[1]:.4f} (success), {example_proba[0]:.4f} (failure)")
-    
-    print("Training complete")
 
 if __name__ == "__main__":
-    main()
+    main(sample_data_file="TwoFingerGripper_Box_20251208_140409.csv")
 

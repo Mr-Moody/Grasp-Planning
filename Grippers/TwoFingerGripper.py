@@ -3,7 +3,7 @@ import numpy as np
 import time
 from scipy.spatial.transform import Rotation as R, Slerp
 
-from Object.Gripper import Gripper
+from Grippers.Gripper import Gripper
 from Object.GameObject import GameObject
 from util import pause
 from constants import TICK_RATE

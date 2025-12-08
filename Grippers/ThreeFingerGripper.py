@@ -1,7 +1,7 @@
 import numpy as np
 import pybullet as p
 
-from Object.Gripper import Gripper
+from Grippers.Gripper import Gripper
 
 class ThreeFingerGripper(Gripper):
     GRASP_JOINTS = [1, 4, 7]

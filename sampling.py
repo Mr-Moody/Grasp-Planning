@@ -8,7 +8,7 @@ import os
 from datetime import datetime
 from scipy.spatial.transform import Rotation as R
 
-from Object.TwoFingerGripper import TwoFingerGripper
+from Grippers.TwoFingerGripper import TwoFingerGripper
 from Object.Objects import Box, Cylinder, Duck
 from Planning.Sphere import FibonacciSphere
 from util import drawGizmo, setupEnvironment, pause
@@ -100,6 +100,7 @@ def addNoiseToOffset(grasp_offset, offset_noise_range=0.005):
     """
     noise = np.random.uniform(-offset_noise_range/2, offset_noise_range/2, size=3)
     noisy_offset = np.array(grasp_offset) + noise
+
     return noisy_offset
 
 def checkGraspSuccess(object, initial_object_pos, threshold=0.15):
@@ -142,15 +143,18 @@ if __name__ == "__main__":
     yaw_noise_range = 1
     offset_noise_range = 0.06
 
-    plane_id = setupEnvironment()
+    plane_id = setupEnvironment(gui=False)
     gripper_start = np.array([0,0,1])
     object_start = np.array([0,0,0.06])
 
-    s = FibonacciSphere(samples=400, radius=0.6, cone_angle=math.pi)
-    s.visualise()
+    s = FibonacciSphere(samples=1000, radius=0.6, cone_angle=math.pi)
+    #s.visualise()
     p.stepSimulation()
 
-    for v in s.vertices:
+    for idx, v in enumerate(s.vertices):
+        if idx % 50 == 0:
+            print(f"Sampling {idx + 1} of {len(s.vertices)} vertices")
+
         # Initialise gripper and object
         gripper = TwoFingerGripper(position=v)
         object = Box(position=object_start)
