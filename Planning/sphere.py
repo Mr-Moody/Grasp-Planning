@@ -18,6 +18,7 @@ class FibonacciSphere():
         self.cone_angle = cone_angle
         self.cone_origin = cone_origin
         self.vertices = self.generateVertices()
+        self.gizmos = []
 
     def generateVertices(self) -> list[np.ndarray]:
         # Reference: https://stackoverflow.com/questions/9600801/evenly-distributing-n-points-on-a-sphere#comment12186258_9600801

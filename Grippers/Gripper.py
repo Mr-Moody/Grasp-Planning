@@ -4,6 +4,7 @@ from scipy.spatial.transform import Rotation as R, Slerp
 from abc import ABC, abstractmethod
 from typing import Optional
 import time
+from constants import GUI
 
 from Object.GameObject import GameObject
 
@@ -85,7 +86,8 @@ class Gripper():
             for _ in range(sim_steps_per_update):
                 p.stepSimulation()
             
-            time.sleep(duration / steps)
+            if GUI:
+                time.sleep(duration / steps)
         
         
     

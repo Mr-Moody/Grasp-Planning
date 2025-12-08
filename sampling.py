@@ -9,6 +9,7 @@ from datetime import datetime
 from scipy.spatial.transform import Rotation as R
 
 from Grippers.TwoFingerGripper import TwoFingerGripper
+from Grippers.RoboticArm import RoboticArm
 from Object.Objects import Box, Cylinder, Duck
 from Planning.Sphere import FibonacciSphere
 from util import drawGizmo, setupEnvironment, pause
@@ -133,8 +134,70 @@ def checkGraspSuccess(object, initial_object_pos, threshold=0.15):
     
     return success
 
-if __name__ == "__main__":
-    gripper_type = "TwoFingerGripper"  # Change to "RoboticArm" to use RoboticArm instead
+def saveGraspData(grasp_data, gripper_type, object_type="Box"):
+    """
+    Save grasp data to CSV file in a consistent format for all grippers.
+    
+    Args:
+        grasp_data: List of sample dictionaries
+        gripper_type: String name of the gripper type
+        object_type: String name of the object type
+    """
+    if not grasp_data:
+        print("No data to save!")
+        return
+    
+    # Determine object type from data if not provided
+    if object_type == "Box" and grasp_data:
+        object_type = grasp_data[0].get("object_type", "Box")
+    
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    filename = f"{gripper_type}_{object_type}_{timestamp}.csv"
+    
+    # Ensure Samples directory exists
+    os.makedirs("Samples", exist_ok=True)
+    output_file = os.path.join("Samples", filename)
+    
+    # Convert to DataFrame - flatten nested structure if needed
+    records = []
+    for sample in grasp_data:
+        # Handle both nested features dict and flat dict formats
+        if "features" in sample:
+            record = {
+                "orientation_roll": sample["features"]["orientation_roll"],
+                "orientation_pitch": sample["features"]["orientation_pitch"],
+                "orientation_yaw": sample["features"]["orientation_yaw"],
+                "offset_x": sample["features"]["offset_x"],
+                "offset_y": sample["features"]["offset_y"],
+                "offset_z": sample["features"]["offset_z"],
+                "approach_dir_x": sample["features"]["approach_dir_x"],
+                "approach_dir_y": sample["features"]["approach_dir_y"],
+                "approach_dir_z": sample["features"]["approach_dir_z"],
+                "approach_distance": sample["features"]["approach_distance"],
+                "label": sample["label"],
+                "object_type": sample["object_type"]
+            }
+        else:
+            # Already flat format (e.g., from RoboticArm)
+            record = sample
+        
+        records.append(record)
+    
+    # Create DataFrame and save to CSV
+    df = pd.DataFrame(records)
+    df.to_csv(output_file, index=False)
+    
+    print(f"\nData collection complete!")
+    print(f"Total samples collected: {len(grasp_data)}")
+    print(f"Data saved to: {output_file}")
+    
+    if len(grasp_data) > 0:
+        success_count = sum(s["label"] if isinstance(s["label"], (int, bool)) else s.get("label", 0) for s in grasp_data)
+        print(f"Success rate: {success_count / len(grasp_data) * 100:.2f}%")
+    
+    return output_file
+
+def main(gripper_type:str="TwoFingerGripper", object_type:str="Box"):
 
     if gripper_type == "TwoFingerGripper":
         grasp_data = []
@@ -145,24 +208,23 @@ if __name__ == "__main__":
         yaw_noise_range = 1
         offset_noise_range = 0.06
 
-    plane_id = setupEnvironment(gui=False)
-    gripper_start = np.array([0,0,1])
-    object_start = np.array([0,0,0.06])
+        plane_id = setupEnvironment(gui=False)
+        gripper_start = np.array([0,0,1])
+        object_start = np.array([0,0,0.06])
 
-    s = FibonacciSphere(samples=1000, radius=0.6, cone_angle=math.pi)
-    #s.visualise()
-    p.stepSimulation()
+        s = FibonacciSphere(samples=1000, radius=0.6, cone_angle=math.pi)
+        #s.visualise()
+        p.stepSimulation()
 
-    for idx, v in enumerate(s.vertices):
-        if idx % 50 == 0:
-            print(f"Sampling {idx + 1} of {len(s.vertices)} vertices")
+        print(f"Sampling {len(s.vertices)} vertices using {gripper_type}")
 
-        # Initialise gripper and object
-        gripper = TwoFingerGripper(position=v)
-        object = Box(position=object_start)
+        for idx, v in enumerate(s.vertices):
+            if idx % 50 == 0:
+                print(f"Sampling {idx + 1} of {len(s.vertices)} vertices")
 
-            if not grasp_data:
-                gripper_type = type(gripper).__name__
+            # Initialise gripper and object
+            gripper = TwoFingerGripper(position=v)
+            object = Box(position=object_start)
             
             gripper.load()
             object.load()
@@ -181,6 +243,7 @@ if __name__ == "__main__":
                 pitch_noise_range=pitch_noise_range,
                 yaw_noise_range=yaw_noise_range
             )
+
             gripper.setPosition(new_position=v, new_orientation=noisy_orientation)
             p.stepSimulation()
             
@@ -212,50 +275,26 @@ if __name__ == "__main__":
             gripper.unload()
             object.unload()
 
-        # Determine object type for filename
-        object_type = grasp_data[0]["object_type"] if grasp_data else "Box"
-
-        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"{gripper_type}_{object_type}_{timestamp}.csv"
+        # Save data after all samples collected
+        saveGraspData(grasp_data, gripper_type, "Box")
         
-        output_file = os.path.join("Samples", filename)
-        
-        # Convert to DataFrame - flatten nested structure
-        records = []
-        for sample in grasp_data:
-            record = {
-                "orientation_roll": sample["features"]["orientation_roll"],
-                "orientation_pitch": sample["features"]["orientation_pitch"],
-                "orientation_yaw": sample["features"]["orientation_yaw"],
-                "offset_x": sample["features"]["offset_x"],
-                "offset_y": sample["features"]["offset_y"],
-                "offset_z": sample["features"]["offset_z"],
-                "approach_dir_x": sample["features"]["approach_dir_x"],
-                "approach_dir_y": sample["features"]["approach_dir_y"],
-                "approach_dir_z": sample["features"]["approach_dir_z"],
-                "approach_distance": sample["features"]["approach_distance"],
-                "label": sample["label"],
-                "object_type": sample["object_type"]
-            }
-            records.append(record)
-        
-        # Create DataFrame and save to CSV
-        df = pd.DataFrame(records)
-        df.to_csv(output_file, index=False)
-        
-        print(f"\nData collection complete!")
-        print(f"Total samples collected: {len(grasp_data)}")
-        print(f"Data saved to: {output_file}")
-        
-        if len(grasp_data) > 0:
-            success_count = sum(s["label"] for s in grasp_data)
-            print(f"Success rate: {success_count / len(grasp_data) * 100:.2f}%")
-
         s.removeVisualisation()
- 
-    elif gripper_type == "RoboticArm":
-        
-        arm = RoboticArm()
-        arm.robotic_arm_grasp_sampling()
 
-    p.disconnect() 
+    elif gripper_type == "RoboticArm":
+        # Use RoboticArm's sampling method but ensure it saves with consistent format
+        arm = RoboticArm()
+        
+        # Call the robotic arm sampling method
+        arm.robotic_arm_grasp_sampling(object_type)
+        
+        print("RoboticArm sampling completed. Data saved by RoboticArm class.")
+
+    else:
+        print(f"Unknown gripper type: {gripper_type}")
+        print("Supported types: 'TwoFingerGripper', 'RoboticArm'")
+
+    p.disconnect()
+
+
+if __name__ == "__main__":
+    main(gripper_type="RoboticArm", object_type="Box")
