@@ -7,7 +7,7 @@ import math
 
 from Object.GameObject import GameObject
 from Object.Objects import Box, Cylinder, Duck
-from Planning.Sphere import FibonacciSphere
+from Planning import sphere
 
 from constants import TICK_RATE
 from util import setupEnvironment, pause
@@ -294,7 +294,7 @@ if __name__ == "__main__":
     gripper_start = np.array([0,0,1])
     object_start = np.array([0,0,0.03])
 
-    s = FibonacciSphere(samples=50, radius=0.6, cone_angle=math.pi)
+    s = sphere.FibonacciSphere(samples=50, radius=0.6, cone_angle=math.pi)
     s.visualise()
     p.stepSimulation()
 
