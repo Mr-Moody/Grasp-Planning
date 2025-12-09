@@ -63,13 +63,15 @@ def modeTrainClassifier(args):
     print("=" * 60)
     
     data_file = args.data_file
+    model_type = args.model_type
     
     data_file_display = data_file if data_file else "Most recent file in Samples/"
     print(f"Data File: {data_file_display}")
+    print(f"Model Type: {model_type}")
     print()
     
     try:
-        train_grasp_model.main(sample_data_file=data_file)
+        train_grasp_model.main(sample_data_file=data_file, model_type=model_type)
         print("\nClassifier training completed successfully!")
     except Exception as e:
         print(f"Error during classifier training: {e}")
@@ -246,6 +248,9 @@ Examples:
   # Train classifier on specific data file
   python main.py --mode train_classifier --data_file Samples/TwoFingerGripper_Box_20251208_150831.csv
   
+  # Train classifier with SVM model
+  python main.py --mode train_classifier --model_type SVM
+  
   # Test planner to find best grasp
   python main.py --mode test_planner --object_x 1.0 --object_y 0.0 --object_z 0.06
   
@@ -299,6 +304,14 @@ Examples:
         type=str,
         default=None,
         help="Path to CSV data file. If not specified, uses most recent file in Samples/ directory."
+    )
+    
+    parser.add_argument(
+        "--model_type",
+        type=str,
+        default="RandomForest",
+        choices=["RandomForest", "SVM", "LogisticRegression"],
+        help="Type of classifier model to train (default: RandomForest)"
     )
     
     # Arguments for test_planner mode

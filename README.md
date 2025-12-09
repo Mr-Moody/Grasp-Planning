@@ -56,19 +56,27 @@ python main.py --mode generate_data --gripper_type TwoFingerGripper --object_typ
 
 #### 2. Train Classifier (`train_classifier`)
 
-Trains a Random Forest classifier on the generated grasp data.
+Trains a classifier on the generated grasp data.
 
 **Arguments:**
 - `--data_file` (str, optional): Path to CSV data file
   - If not specified, uses the most recent file in the `Samples/` directory
+- `--model_type` (str, default: "RandomForest"): Type of classifier model to train
+  - Options: `RandomForest`, `SVM`, `LogisticRegression`
 
 **Examples:**
 ```bash
-# Train on the most recent data file
+# Train on the most recent data file with default RandomForest model
 python main.py --mode train_classifier
 
 # Train on a specific data file
 python main.py --mode train_classifier --data_file Samples/TwoFingerGripper_Box_20251208_150831.csv
+
+# Train using SVM model
+python main.py --mode train_classifier --model_type SVM
+
+# Train using LogisticRegression model on a specific data file
+python main.py --mode train_classifier --data_file Samples/TwoFingerGripper_Box_20251208_150831.csv --model_type LogisticRegression
 ```
 
 #### 3. Test Planner (`test_planner`)

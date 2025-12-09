@@ -139,7 +139,6 @@ def saveGraspData(grasp_data, gripper_type, object_type="Box"):
     
     # Create DataFrame and save to CSV
     df = pd.DataFrame(records)
-    df = balance_dataset(df)
     df.to_csv(output_file, index=False)
     
     print(f"\nData collection complete!")
@@ -151,43 +150,6 @@ def saveGraspData(grasp_data, gripper_type, object_type="Box"):
         print(f"Success rate: {success_count / len(grasp_data) * 100:.2f}%")
     
     return output_file
-
-def balance_dataset(df: pd.DataFrame, label_col: str = 'label') -> pd.DataFrame:
-    """
-    Balances a dataset by downsampling the majority class to match the minority class count.
-    
-    Args:
-        df: Input DataFrame with a 'label' column (0/negative, 1/positive)
-        label_col: Name of the label column (default: 'label')
-    
-    Returns:
-        Balanced DataFrame with equal number of positive and negative samples.
-    """
-    # Separate positive and negative samples
-    positive = df[df[label_col] == 1]
-    negative = df[df[label_col] == 0]
-    
-    # Get the minority class count
-    min_count = min(len(positive), len(negative))
-    
-    # Downsample majority class
-    if len(positive) > len(negative):
-        # Downsample positive samples
-        balanced_positive = positive.sample(n=min_count, random_state=42)
-        balanced_negative = negative
-    else:
-        # Downsample negative samples
-        balanced_negative = negative.sample(n=min_count, random_state=42)
-        balanced_positive = positive
-    
-    # Concatenate and shuffle
-    balanced_df = pd.concat([balanced_positive, balanced_negative], ignore_index=True)
-    balanced_df = balanced_df.sample(frac=1, random_state=42).reset_index(drop=True)
-    
-    print(f"Original: {len(df)} samples ({len(positive)} positive, {len(negative)} negative)")
-    print(f"Balanced: {len(balanced_df)} samples ({min_count} positive, {min_count} negative)")
-    
-    return balanced_df
 
 def main(num_samples:int=500, gripper_type:str="TwoFingerGripper", object_type:str="Box", gui:bool=False):
 

@@ -208,3 +208,6 @@ __marimo__/
 
 #Exclude virtual environment files
 /sim-venv
+
+.vscode/
+*.pdf

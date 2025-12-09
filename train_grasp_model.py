@@ -28,6 +28,8 @@ def loadGraspData(data_file:str="Samples/grasp_data.csv"):
     # Load data from CSV using pandas
     df = pd.read_csv(data_file)
     
+    df = balanceDataset(df)
+    
     feature_columns = [
         "orientation_roll",
         "orientation_pitch",
@@ -47,7 +49,57 @@ def loadGraspData(data_file:str="Samples/grasp_data.csv"):
     
     return features, labels, object_types
 
-def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n_iter_search=150, modelType: str = "RandomForest"):
+def balanceDataset(df:pd.DataFrame) -> pd.DataFrame:
+    """
+    Balances a dataset by downsampling the majority class to match the minority class count.
+    
+    Args:
+        df: Input DataFrame with a label column (0/Failure, 1/Success)
+    
+    Returns:
+        Balanced DataFrame with equal number of positive and negative samples.
+    """
+    # Separate positive and negative samples
+    positive = df[df["label"] == 1]
+    negative = df[df["label"] == 0]
+    
+    # Get len of smallest class
+    min_count = min(len(positive), len(negative))
+    
+    # If missing either 1 or 0 label set then return original dataset
+    if min_count == 0:
+        print(f"WARNING: One class has 0 samples. Returning original dataset.")
+        print(f"Original: {len(df)} samples ({len(positive)} positive, {len(negative)} negative)")
+        return df
+    
+    if len(positive) > len(negative):
+        # Downsample positive samples
+        balanced_positive = positive.sample(n=min_count, random_state=42)
+        balanced_negative = negative
+    elif len(negative) > len(positive):
+        # Downsample negative samples
+        balanced_negative = negative.sample(n=min_count, random_state=42)
+        balanced_positive = positive
+    else:
+        # Classes already balanced
+        balanced_positive = positive
+        balanced_negative = negative
+    
+    # Concatenate and shuffle
+    balanced_df = pd.concat([balanced_positive, balanced_negative], ignore_index=True)
+    balanced_df = balanced_df.sample(frac=1, random_state=42).reset_index(drop=True)
+    
+    # Verify final counts
+    final_positive = len(balanced_df[balanced_df["label"] == 1])
+    final_negative = len(balanced_df[balanced_df["label"] == 0])
+    
+    print("\nBalancing Dataset:")
+    print(f"Original: {len(df)} samples ({len(positive)} positive, {len(negative)} negative)")
+    print(f"Balanced: {len(balanced_df)} samples ({final_positive} positive, {final_negative} negative)")
+    
+    return balanced_df
+
+def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n_iter_search=150, model_type:str="RandomForest"):
     """
     Train a Random Forest or Gradient Boosting Classifier on grasp data.
     
@@ -65,7 +117,6 @@ def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n
     # Check class distribution
     unique_labels = np.unique(labels)
     label_counts = np.bincount(labels)
-    class_dist = dict(zip(range(len(label_counts)), label_counts))
     
     X_temp, X_test, y_temp, y_test = train_test_split(features, labels, test_size=test_size, random_state=random_state, stratify=labels)
 
@@ -84,9 +135,8 @@ def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n
     unique_labels = np.unique(labels)
     class_weight = "balanced" if len(unique_labels) > 1 else None
 
-    modelType = modelType.lower()
 
-    if modelType == "randomforest": 
+    if model_type == "RandomForest": 
         # More conservative base classifier to reduce overfitting
         base_clf = RandomForestClassifier(n_estimators=150, 
                                             max_depth=7,
@@ -102,11 +152,11 @@ def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n
             "max_depth": [3, 5, 7, 10, 12, 15],  # Reduced max depth - shallower trees prevent overfitting
             "min_samples_split": [10, 15, 20, 25, 30, 40, 50],  # Increased - require more samples to split
             "min_samples_leaf": [4, 6, 8, 10, 12, 15, 20],  # Increased - larger leaf nodes
-            "max_features": ['sqrt', 'log2', 0.3, 0.4],  # Reduced - fewer features per split
+            "max_features": ["sqrt", "log2", 0.3, 0.4],  # Reduced - fewer features per split
             "bootstrap": [True],  # Always use bootstrap for better generalization
         }
 
-    elif modelType == "svm":
+    elif model_type == "SVM":
         base_clf = SVC(kernel = "rbf", 
                        probability=True, 
                        class_weight=class_weight, 
@@ -117,29 +167,39 @@ def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n
             "gamma": uniform(0.01, 1)
         }        
 
-    elif modelType == "logisticregression":
+    elif model_type == "LogisticRegression":
         base_clf = LogisticRegression(class_weight=class_weight, 
-                                      max_iter=500, 
+                                      max_iter=5000,
                                       random_state=random_state)
 
         param_distributions = {
             "C": uniform(0.01, 100),
-            "penalty": ['l2'],  # 'l1' can be added if solver supports it
-            "solver": ['lbfgs', 'saga']  # 'saga' supports l1 penalty
+            "penalty": ["l2"],
+            "solver": ["lbfgs", "saga"] 
         }
+    else:
+        raise ValueError(f"Unknown model_type: {model_type}. Must be one of: RandomForest, SVM, LogisticRegression")
 
-    # Calculate total possible combinations
-    total_combinations = (len(param_distributions["n_estimators"]) * 
-                         len(param_distributions["max_depth"]) * 
-                         len(param_distributions["min_samples_split"]) * 
-                         len(param_distributions["min_samples_leaf"]) * 
-                         len(param_distributions["max_features"]) * 
-                         len(param_distributions["bootstrap"]))
+    # Calculate total possible combinations (only for RandomForest, others use continuous distributions)
+    if model_type == "RandomForest":
+        total_combinations = (len(param_distributions["n_estimators"]) * 
+                             len(param_distributions["max_depth"]) * 
+                             len(param_distributions["min_samples_split"]) * 
+                             len(param_distributions["min_samples_leaf"]) * 
+                             len(param_distributions["max_features"]) * 
+                             len(param_distributions["bootstrap"]))
+        
+        # Try up to n_iter_search combinations or all if fewer
+        n_iter = min(n_iter_search, total_combinations)
+    else:
+        # For SVM and LogisticRegression, param distributions use continuous uniform distributions so use n_iter_search
+        total_combinations = float("inf")
+        n_iter = n_iter_search
     
-    # Try up to n_iter_search combinations or all if fewer
-    n_iter = min(n_iter_search, total_combinations)  
-    
-    print(f"Total possible parameter combinations: {total_combinations}")
+    if model_type == "RandomForest":
+        print(f"Total possible parameter combinations: {total_combinations}")
+    else:
+        print(f"Parameter space: continuous distributions")
     print(f"Exploring {n_iter} combinations")
     
     search = RandomizedSearchCV(
@@ -160,10 +220,10 @@ def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n
 
     print(f"\nBest parameters found: {search.best_params_}")
     best_idx = search.best_index_
-    best_std = search.cv_results_['std_test_score'][best_idx] if best_idx < len(search.cv_results_['std_test_score']) else 0.0
+    best_std = search.cv_results_["std_test_score"][best_idx] if best_idx < len(search.cv_results_["std_test_score"]) else 0.0
     print(f"Best CV score: {search.best_score_:.4f} (+/- {best_std:.4f})")
 
-    print(f"\nTraining Random Forest...")
+    print(f"\nTraining {model_type}...")
     print(f"Training samples: {len(X_train)}, Validation samples: {len(X_val)}, Test samples: {len(X_test)}")
     
     # Model is already trained by RandomizedSearchCV with refit=True
@@ -197,7 +257,7 @@ def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n
     # Check for overfitting
     train_val_gap = train_accuracy - val_accuracy
     if train_val_gap > 0.15:
-        print(f"\n{YELLOW}WARNING: Large gap between train ({train_accuracy:.4f}) and validation ({val_accuracy:.4f}) accuracy!{RESET}")
+        print(f"\n{RED}WARNING: Large gap between train ({train_accuracy:.4f}) and validation ({val_accuracy:.4f}) accuracy!{RESET}")
         print(f"   Gap: {train_val_gap:.4f} - Model is overfitting significantly.{RESET}")
         print(f"\n   Current best parameters:")
         print(f"   - max_depth: {clf.max_depth}")
@@ -209,10 +269,9 @@ def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n
     elif train_val_gap > 0.05:
         print(f"\n{YELLOW}Moderate overfitting detected (gap: {train_val_gap:.4f}){RESET}\n")
         print(f"   Current parameters: max_depth={clf.max_depth}, min_samples_split={clf.min_samples_split}, min_samples_leaf={clf.min_samples_leaf}")
-        print(f"   Consider slightly increasing regularization or collecting more data.")
 
     else:
-        print(f"\n{GREEN}Good generalization (train-val gap: {train_val_gap:.4f}){RESET}")
+        print(f"\n{GREEN}Good generalisation (train-val gap: {train_val_gap:.4f}){RESET}")
     
     print("=" * 60)
     
@@ -424,7 +483,7 @@ def compareModels(features, labels, test_size=0.2, val_size=0.2, random_state=42
     
     return best_model, best_scaler, best_model_type, results
 
-def main(sample_data_file:Optional[str]=None):
+def main(sample_data_file:Optional[str]=None, model_type:str="RandomForest"):
     print("=" * 60)
     print("Grasp Prediction Model Training")
     print("=" * 60 + "\n")
@@ -465,7 +524,8 @@ def main(sample_data_file:Optional[str]=None):
         labels,
         test_size=0.2,
         val_size=0.2,
-        random_state=42)
+        random_state=42,
+        model_type=model_type)
     
     # Save model
     print("\nSaving model...")
