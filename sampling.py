@@ -139,6 +139,7 @@ def saveGraspData(grasp_data, gripper_type, object_type="Box"):
     
     # Create DataFrame and save to CSV
     df = pd.DataFrame(records)
+    df = balance_dataset(df)
     df.to_csv(output_file, index=False)
     
     print(f"\nData collection complete!")
