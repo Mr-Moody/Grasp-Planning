@@ -6,6 +6,8 @@ from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.model_selection import train_test_split, cross_val_score, RandomizedSearchCV
 from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
 from sklearn.preprocessing import StandardScaler
+from sklearn.svm import SVC
+from sklearn.linear_model import LogisticRegression
 from scipy.stats import randint, uniform
 import joblib
 import os
@@ -45,7 +47,7 @@ def loadGraspData(data_file:str="Samples/grasp_data.csv"):
     
     return features, labels, object_types
 
-def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n_iter_search=150):
+def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n_iter_search=150, modelType: str = "RandomForest"):
     """
     Train a Random Forest or Gradient Boosting Classifier on grasp data.
     
@@ -78,29 +80,54 @@ def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n
     X_val_scaled = scaler.transform(X_val)
     X_test_scaled = scaler.transform(X_test)
 
-    param_distributions = {
-        "n_estimators": [100, 150, 200, 250, 300],  # Reduced range, fewer trees can help
-        "max_depth": [3, 5, 7, 10, 12, 15],  # Reduced max depth - shallower trees prevent overfitting
-        "min_samples_split": [10, 15, 20, 25, 30, 40, 50],  # Increased - require more samples to split
-        "min_samples_leaf": [4, 6, 8, 10, 12, 15, 20],  # Increased - larger leaf nodes
-        "max_features": ['sqrt', 'log2', 0.3, 0.4],  # Reduced - fewer features per split
-        "bootstrap": [True],  # Always use bootstrap for better generalization
-    }
-
     # Check if need class_weight for imbalanced classes
     unique_labels = np.unique(labels)
     class_weight = "balanced" if len(unique_labels) > 1 else None
 
-    # More conservative base classifier to reduce overfitting
-    base_clf = RandomForestClassifier(n_estimators=150, 
-                                        max_depth=7,
-                                        min_samples_split=20,
-                                        min_samples_leaf=10,
-                                        max_features="sqrt",
-                                        class_weight=class_weight,
-                                        bootstrap=True,
-                                        random_state=42)
-    
+    modelType = modelType.lower()
+
+    if modelType == "randomforest": 
+        # More conservative base classifier to reduce overfitting
+        base_clf = RandomForestClassifier(n_estimators=150, 
+                                            max_depth=7,
+                                            min_samples_split=20,
+                                            min_samples_leaf=10,
+                                            max_features="sqrt",
+                                            class_weight=class_weight,
+                                            bootstrap=True,
+                                            random_state=42)
+        
+        param_distributions = {
+            "n_estimators": [100, 150, 200, 250, 300],  # Reduced range, fewer trees can help
+            "max_depth": [3, 5, 7, 10, 12, 15],  # Reduced max depth - shallower trees prevent overfitting
+            "min_samples_split": [10, 15, 20, 25, 30, 40, 50],  # Increased - require more samples to split
+            "min_samples_leaf": [4, 6, 8, 10, 12, 15, 20],  # Increased - larger leaf nodes
+            "max_features": ['sqrt', 'log2', 0.3, 0.4],  # Reduced - fewer features per split
+            "bootstrap": [True],  # Always use bootstrap for better generalization
+        }
+
+    elif modelType == "svm":
+        base_clf = SVC(kernel = "rbf", 
+                       probability=True, 
+                       class_weight=class_weight, 
+                       random_state=random_state)
+
+        param_distributions = {
+            "C": uniform(0.1, 100),
+            "gamma": uniform(0.01, 1)
+        }        
+
+    elif modelType == "logisticregression":
+        base_clf = LogisticRegression(class_weight=class_weight, 
+                                      max_iter=500, 
+                                      random_state=random_state)
+
+        param_distributions = {
+            "C": uniform(0.01, 100),
+            "penalty": ['l2'],  # 'l1' can be added if solver supports it
+            "solver": ['lbfgs', 'saga']  # 'saga' supports l1 penalty
+        }
+
     # Calculate total possible combinations
     total_combinations = (len(param_distributions["n_estimators"]) * 
                          len(param_distributions["max_depth"]) * 
