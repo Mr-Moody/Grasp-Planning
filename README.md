@@ -63,6 +63,8 @@ Trains a classifier on the generated grasp data.
   - If not specified, uses the most recent file in the `Samples/` directory
 - `--model_type` (str, default: "RandomForest"): Type of classifier model to train
   - Options: `RandomForest`, `SVM`, `LogisticRegression`
+- `--cross_validation`: Run cross-validation with multiple train/test splits (80%/20%)
+- `--n_splits` (int, default: 3): Number of splits for cross-validation
 
 **Examples:**
 ```bash
@@ -77,11 +79,69 @@ python main.py --mode train_classifier --model_type SVM
 
 # Train using LogisticRegression model on a specific data file
 python main.py --mode train_classifier --data_file Samples/TwoFingerGripper_Box_20251208_150831.csv --model_type LogisticRegression
+
+# Train with cross-validation (3 splits by default)
+python main.py --mode train_classifier --cross_validation
+
+# Train with cross-validation using 5 splits
+python main.py --mode train_classifier --cross_validation --n_splits 5
 ```
 
 #### 3. Test Planner (`test_planner`)
 
 Tests the planner by finding the best grasp configuration for a given object position using optimisation.
+
+**Arguments:**
+- `--object_x` (float, default: 1.0): X position of the object
+- `--object_y` (float, default: 0.0): Y position of the object
+- `--object_z` (float, default: 0.06): Z position of the object
+- `--maxiter` (int, default: 100): Maximum number of iterations for optimisation
+- `--seed` (int, default: 42): Random seed for optimisation reproducibility
+- `--tol` (float, default: 0.01): Convergence tolerance for optimisation
+- `--approach_bounds` (str, default: "(-1.0,1.0),(-1.0,1.0),(0.3,1.0)"): Bounds for approach vertex
+  - Format: `"(min_x,max_x),(min_y,max_y),(min_z,max_z)"`
+- `--offset_bounds` (str, default: "(-0.1,0.1),(-0.1,0.1),(-0.05,0.1)"): Bounds for grasp offset
+  - Format: `"(min_x,max_x),(min_y,max_y),(min_z,max_z)"`
+
+**Examples:**
+```bash
+# Find best grasp with default object position
+python main.py --mode test_planner
+
+# Find best grasp for object at specific position
+python main.py --mode test_planner --object_x 1.0 --object_y 0.0 --object_z 0.06
+
+# Test with custom optimization parameters
+python main.py --mode test_planner --object_x 0.5 --object_y 0.5 --object_z 0.1 --maxiter 200 --tol 0.005
+
+```
+
+#### 4. Test Execute (`test_execute`)
+
+Tests the classifier by executing grasps in simulation and verifying predictions against actual results.
+
+**Arguments:**
+- `--num_grasps` (int, default: 10): Number of test grasps to execute
+- `--gripper_type` (str, default: "TwoFingerGripper"): Type of gripper
+  - Options: `TwoFingerGripper`, `RoboticArm`
+- `--object_type` (str, default: "Box"): Type of object to grasp
+  - Options: `Box`, `Cylinder`, `Duck`
+- `--seed` (int, default: 42): Random seed for test grasp generation
+- `--gui`: Enable GUI visualisation during execution
+
+**Examples:**
+```bash
+# Test classifier with 10 test grasps (default)
+python main.py --mode test_execute
+
+# Test with 15 grasps on a cylinder
+python main.py --mode test_execute --num_grasps 15 --object_type Cylinder
+
+# Test with GUI enabled
+python main.py --mode test_execute --num_grasps 10 --gui
+```
+
+#### 5. Visualise (`visualise`)
 
 **Arguments:**
 - `--object_x` (float, default: 1.0): X position of the object
@@ -139,7 +199,10 @@ python main.py --mode train_classifier
 # Step 3: Test the planner to find best grasp
 python main.py --mode test_planner --object_x 1.0 --object_y 0.0 --object_z 0.06
 
-# Step 4: Visualise the generated data
+# Step 4: Test classifier by executing grasps and verifying predictions
+python main.py --mode test_execute --num_grasps 10 --gripper_type TwoFingerGripper --object_type Box
+
+# Step 5: Visualise the generated data
 python main.py --mode visualise --csv_file Samples/TwoFingerGripper_Box_20251208_150831.csv
 ```
 

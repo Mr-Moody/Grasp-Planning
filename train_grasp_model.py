@@ -4,7 +4,7 @@ import numpy as np
 from typing import Optional
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.model_selection import train_test_split, cross_val_score, RandomizedSearchCV
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+from sklearn.metrics import accuracy_score, classification_report, confusion_matrix, precision_score, recall_score, f1_score
 from sklearn.preprocessing import StandardScaler
 from sklearn.svm import SVC
 from sklearn.linear_model import LogisticRegression
@@ -121,20 +121,31 @@ def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n
     X_temp, X_test, y_temp, y_test = train_test_split(features, labels, test_size=test_size, random_state=random_state, stratify=labels)
 
     # Separate train and validation from temp
-    val_size_adjusted = val_size / (1 - test_size)  # Adjust val_size relative to remaining data
-
-    X_train, X_val, y_train, y_val = train_test_split(X_temp, y_temp, test_size=val_size_adjusted, random_state=random_state, stratify=y_temp)
+    if val_size > 0:
+        val_size_adjusted = val_size / (1 - test_size)  # Adjust val_size relative to remaining data
+        X_train, X_val, y_train, y_val = train_test_split(X_temp, y_temp, test_size=val_size_adjusted, random_state=random_state, stratify=y_temp)
+    else:
+        # No validation set so uses all data for training
+        X_train = X_temp
+        y_train = y_temp
+        X_val = np.array([]).reshape(0, features.shape[1])  # Empty validation set
+        y_val = np.array([])  # Empty validation labels
     
     # Feature scaling
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train)
-    X_val_scaled = scaler.transform(X_val)
+    
+    # Only transform validation set if it's not empty
+    if len(X_val) > 0:
+        X_val_scaled = scaler.transform(X_val)
+    else:
+        X_val_scaled = np.array([]).reshape(0, features.shape[1])
+        
     X_test_scaled = scaler.transform(X_test)
 
     # Check if need class_weight for imbalanced classes
     unique_labels = np.unique(labels)
     class_weight = "balanced" if len(unique_labels) > 1 else None
-
 
     if model_type == "RandomForest": 
         # More conservative base classifier to reduce overfitting
@@ -231,16 +242,22 @@ def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n
     
     # Make predictions on all sets
     y_train_pred = clf.predict(X_train_scaled)
-    y_val_pred = clf.predict(X_val_scaled)
+    
+    if val_size > 0:
+        y_val_pred = clf.predict(X_val_scaled)
+        val_accuracy = accuracy_score(y_val, y_val_pred)
+    else:
+        # No validation set
+        y_val_pred = np.array([])
+        val_accuracy = 0.0
+        
     y_test_pred = clf.predict(X_test_scaled)
     y_pred_proba = clf.predict_proba(X_test_scaled)
     
     # Calculate scores for all sets
     train_accuracy = accuracy_score(y_train, y_train_pred)
-    val_accuracy = accuracy_score(y_val, y_val_pred)
     test_accuracy = accuracy_score(y_test, y_test_pred)
     
-    # Print scores
     print("\n" + "=" * 60)
     print("Model Performance Scores:")
     print("=" * 60)
@@ -284,7 +301,7 @@ def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n
     unique_classes_pred = np.unique(y_test_pred)
     all_classes = np.unique(np.concatenate([unique_classes_test, unique_classes_pred]))
     
-    # Classification report (only if we have data to report on)
+    # Classification report
     print("\nClassification Report (Test Set):")
 
     if len(all_classes) == 1:
@@ -292,7 +309,7 @@ def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n
         print("Cannot generate classification report with only one class.")
         print(f"All test samples are: {'Success' if all_classes[0] == 1 else 'Failure'}")
     else:
-        # Use labels parameter to ensure both classes are included even if one is missing
+        # Use labels to make sure both classes are included even if one is missing
         print(classification_report(y_test, y_test_pred, 
                                    labels=[0, 1],
                                    target_names=["Failure", "Success"],
@@ -318,7 +335,6 @@ def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n
     # for i in indices:
     #     print(f"  {feature_names[i]}: {importances[i]:.4f}")
 
-    
     return clf, scaler, X_test_scaled, y_test, y_test_pred, X_test, y_pred_proba
 
 def saveModel(model, scaler, model_file="grasp_model.pkl", scaler_file="grasp_scaler.pkl"):
@@ -392,6 +408,104 @@ def predictGrasp(model, scaler, orientation_roll, orientation_pitch, orientation
     
     return prediction, probability
 
+def runCrossValidation(features, labels, n_splits=3, test_size=0.2, model_type="RandomForest", random_state=42):
+    """
+    Run cross-validation by randomly splitting train (80%) and test (20%) sets multiple times.
+    
+    Args:
+        features: Feature matrix
+        labels: Label vector
+        n_splits: Number of random splits to perform (default: 3)
+        test_size: Proportion of data for testing (default: 0.2, meaning 80% train, 20% test)
+        model_type: Type of classifier model to train
+        random_state: Base random seed (will be incremented for each split)
+    
+    Returns:
+        dict: Dictionary containing average performance metrics across all splits
+    """
+    print("=" * 60)
+    print("Cross-Validation: Multiple Train/Test Splits")
+    print("=" * 60)
+    print(f"Number of splits: {n_splits}")
+    print(f"Train/Test split: {(1-test_size)*100:.0f}% / {test_size*100:.0f}%")
+    print(f"Model type: {model_type}\n")
+    
+    accuracies = []
+    precisions = []
+    recalls = []
+    f1_scores = []
+    
+    for split_idx in range(n_splits):
+        print(f"Split {split_idx + 1}/{n_splits}...")
+        split_seed = random_state + split_idx
+        
+        # Train model with this split
+        model, scaler, X_test_scaled, y_test, y_test_pred, X_test, y_pred_proba = trainModel(
+            features,
+            labels,
+            test_size=test_size,
+            val_size=0.0,  # No validation set for cross-validation
+            random_state=split_seed,
+            model_type=model_type,
+            n_iter_search=100
+        )
+        
+        # Calculate metrics
+        from sklearn.metrics import precision_score, recall_score, f1_score
+        
+        accuracy = accuracy_score(y_test, y_test_pred)
+        precision = precision_score(y_test, y_test_pred, average="binary", zero_division=0.0) if len(np.unique(y_test)) > 1 else 0.0
+        recall = recall_score(y_test, y_test_pred, average="binary", zero_division=0.0) if len(np.unique(y_test)) > 1 else 0.0
+        f1 = f1_score(y_test, y_test_pred, average="binary", zero_division=0.0) if len(np.unique(y_test)) > 1 else 0.0
+        
+        accuracies.append(accuracy)
+        precisions.append(precision)
+        recalls.append(recall)
+        f1_scores.append(f1)
+        
+        print(f"  Accuracy: {accuracy:.4f}, Precision: {precision:.4f}, Recall: {recall:.4f}, F1: {f1:.4f}\n")
+    
+    # Calculate statistics
+    mean_accuracy = np.mean(accuracies)
+    std_accuracy = np.std(accuracies)
+    mean_precision = np.mean(precisions)
+    std_precision = np.std(precisions)
+    mean_recall = np.mean(recalls)
+    std_recall = np.std(recalls)
+    mean_f1 = np.mean(f1_scores)
+    std_f1 = np.std(f1_scores)
+    
+    print("=" * 60)
+    print("Cross-Validation Results Summary")
+    print("=" * 60)
+    print(f"Number of splits: {n_splits}\n")
+    print("Average Performance (Mean +/- Std):")
+    print(f"  Accuracy:  {mean_accuracy:.4f} +/- {std_accuracy:.4f}")
+    print(f"  Precision: {mean_precision:.4f} +/- {std_precision:.4f}")
+    print(f"  Recall:    {mean_recall:.4f} +/- {std_recall:.4f}")
+    print(f"  F1-Score:  {mean_f1:.4f} +/- {std_f1:.4f}\n")
+    print("Individual Split Results:")
+    for i, (acc, prec, rec, f1) in enumerate(zip(accuracies, precisions, recalls, f1_scores)):
+        print(f"  Split {i+1}: Acc={acc:.4f}, Prec={prec:.4f}, Rec={rec:.4f}, F1={f1:.4f}")
+    print("=" * 60)
+    
+    return {
+        "n_splits": n_splits,
+        "mean_accuracy": mean_accuracy,
+        "std_accuracy": std_accuracy,
+        "mean_precision": mean_precision,
+        "std_precision": std_precision,
+        "mean_recall": mean_recall,
+        "std_recall": std_recall,
+        "mean_f1": mean_f1,
+        "std_f1": std_f1,
+        "accuracies": accuracies,
+        "precisions": precisions,
+        "recalls": recalls,
+        "f1_scores": f1_scores
+    }
+
+
 def compareModels(features, labels, test_size=0.2, val_size=0.2, random_state=42):
     """
     Compare Random Forest and Gradient Boosting models to find the best one.
@@ -450,7 +564,7 @@ def compareModels(features, labels, test_size=0.2, val_size=0.2, random_state=42
     X_val_scaled_rf = scaler_rf.transform(X_val)
     y_val_pred_rf = model_rf.predict(X_val_scaled_rf)
     val_acc_rf = accuracy_score(y_val, y_val_pred_rf)
-    results['random_forest'] = {'model': model_rf, 'scaler': scaler_rf, 'val_accuracy': val_acc_rf}
+    results["random_forest"] = {"model": model_rf, "scaler": scaler_rf, "val_accuracy": val_acc_rf}
     
     print(f"\nRandom Forest Validation Accuracy: {val_acc_rf:.4f}\n")
     
@@ -463,22 +577,22 @@ def compareModels(features, labels, test_size=0.2, val_size=0.2, random_state=42
     X_val_scaled_gb = scaler_gb.transform(X_val)
     y_val_pred_gb = model_gb.predict(X_val_scaled_gb)
     val_acc_gb = accuracy_score(y_val, y_val_pred_gb)
-    results['gradient_boosting'] = {'model': model_gb, 'scaler': scaler_gb, 'val_accuracy': val_acc_gb}
+    results["gradient_boosting"] = {"model": model_gb, "scaler": scaler_gb, "val_accuracy": val_acc_gb}
     
     print(f"\nGradient Boosting Validation Accuracy: {val_acc_gb:.4f}\n")
     
     # Determine best model
     if val_acc_rf > val_acc_gb:
-        best_model_type = 'random_forest'
+        best_model_type = "random_forest"
         best_model = model_rf
         best_scaler = scaler_rf
     else:
-        best_model_type = 'gradient_boosting'
+        best_model_type = "gradient_boosting"
         best_model = model_gb
         best_scaler = scaler_gb
     
     print("=" * 60)
-    print(f"Best Model: {best_model_type.upper()} (Val Accuracy: {results[best_model_type]['val_accuracy']:.4f})")
+    print(f"Best Model: {best_model_type.upper()} (Val Accuracy: {results[best_model_type]["val_accuracy"]:.4f})")
     print("=" * 60)
     
     return best_model, best_scaler, best_model_type, results
@@ -510,12 +624,10 @@ def main(sample_data_file:Optional[str]=None, model_type:str="RandomForest"):
             print(f"   Using most recent file: {csv_files[0]}")
 
 
-        
     features, labels, object_types = loadGraspData(data_file)
     print(f"   Loaded {len(features)} samples")
     print(f"   Features shape: {features.shape}")
     print(f"   Success rate: {np.mean(labels) * 100:.2f}%")
-
     
     print("\nTraining model...\n")
 

@@ -1,11 +1,12 @@
 """
 Main entry point for the Grasp Planning system.
 
-Supports four modes:
+Supports five modes:
 1. generate_data - Generate grasp dataset by sampling
 2. train_classifier - Train a classifier on the generated data
 3. test_planner - Test the planner by finding best grasps
-4. visualise - Visualise grasp data from CSV files
+4. test_execute - Test classifier by executing grasps and verifying predictions
+5. visualise - Visualise grasp data from CSV files
 """
 import argparse
 import os
@@ -15,6 +16,7 @@ from typing import Optional
 import sampling
 import train_grasp_model
 import predict_grasp
+import test_execute_grasps
 import pybullet as p
 
 def modeGenerateData(args):
@@ -34,8 +36,7 @@ def modeGenerateData(args):
     print(f"Gripper Type: {gripper_type}")
     print(f"Object Type: {object_type}")
     print(f"Number of Samples: {num_samples}")
-    print(f"GUI: {gui}")
-    print()
+    print(f"GUI: {gui}\n")
     
     try:
         sampling.main(num_samples=num_samples, gripper_type=gripper_type, object_type=object_type, gui=gui)
@@ -64,17 +65,53 @@ def modeTrainClassifier(args):
     
     data_file = args.data_file
     model_type = args.model_type
+    run_cross_validation = args.cross_validation
+    n_splits = args.n_splits
     
     data_file_display = data_file if data_file else "Most recent file in Samples/"
     print(f"Data File: {data_file_display}")
     print(f"Model Type: {model_type}")
+    
+    if run_cross_validation:
+        print(f"Cross-Validation: Enabled ({n_splits} splits)")
+        
     print()
     
     try:
+        import os
+        
+        if data_file is not None:
+            path = os.path.join("Samples", data_file)
+            
+            if not os.path.exists(path):
+                raise FileNotFoundError(f"Data file {path} not found.")
+            
+            data_file_path = path
+        else:
+            samples_dir = "Samples"
+            csv_files = [f for f in os.listdir(samples_dir) if f.endswith(".csv")]
+            
+            if csv_files:
+                csv_files.sort(key=lambda f: os.path.getmtime(os.path.join(samples_dir, f)), reverse=True)
+                data_file_path = os.path.join(samples_dir, csv_files[0])
+                print(f"   Using most recent file: {csv_files[0]}")
+                
+            else:
+                raise FileNotFoundError("No CSV files found in Samples directory.")
+        
+        features, labels, object_types = train_grasp_model.loadGraspData(data_file_path)
+        
+        if run_cross_validation:
+            print("\nRunning cross-validation...")
+            cv_results = train_grasp_model.runCrossValidation(features, labels, n_splits=n_splits, model_type=model_type)
+        
         train_grasp_model.main(sample_data_file=data_file, model_type=model_type)
         print("\nClassifier training completed successfully!")
+        
     except Exception as e:
         print(f"Error during classifier training: {e}")
+        import traceback
+        traceback.print_exc()
         sys.exit(1)
 
 
@@ -126,22 +163,17 @@ def modeTestPlanner(args):
     
     print(f"Object Position: {object_pos}")
     print(f"Max Iterations: {maxiter}")
-    print(f"GUI: {gui}")
-    print()
+    print(f"GUI: {gui}\n")
     
     try:
-        # Setup environment
         from util import setupEnvironment
         setupEnvironment(gui=gui)
         
-        # Create gripper
         gripper = TwoFingerGripper()
         
-        # Parse bounds
         approach_bounds = parseBounds(args.approach_bounds)
         offset_bounds = parseBounds(args.offset_bounds)
         
-        # Find best grasp
         print("Optimising for best grasp...")
         best_grasp = predict_grasp.findBestGrasp(
             gripper,
@@ -187,6 +219,56 @@ def modeTestPlanner(args):
             pass
 
 
+def modeTestExecute(args):
+    """
+    Test classifier by executing grasps and verifying predictions.
+    """
+    
+    print("=" * 60)
+    print("Classifier Test Execution")
+    print("=" * 60)
+    
+    num_grasps = args.num_grasps
+    gripper_type = args.gripper_type
+    object_type = args.object_type
+    gui = args.gui
+    seed = args.seed
+    
+    print(f"Number of Test Grasps: {num_grasps}")
+    print(f"Gripper Type: {gripper_type}")
+    print(f"Object Type: {object_type}")
+    print(f"GUI: {gui}")
+    print(f"Seed: {seed}\n")
+    
+    try:
+        results = test_execute_grasps.testClassifierPredictions(
+            num_grasps=num_grasps,
+            gripper_type=gripper_type,
+            object_type=object_type,
+            gui=gui,
+            seed=seed
+        )
+        
+        if results:
+            print("\nTest execution completed successfully!")
+        else:
+            print("\nTest execution failed. Please check the error messages above.")
+            sys.exit(1)
+            
+    except Exception as e:
+        print(f"Error during test execution: {e}")
+        import traceback
+        traceback.print_exc()
+        sys.exit(1)
+    
+    finally:
+        # Ensure PyBullet is disconnected
+        try:
+            p.disconnect()
+        except:
+            pass
+
+
 def modeVisualise(args):
     """
     Visualise grasp data from CSV files.
@@ -218,8 +300,7 @@ def modeVisualise(args):
         print(f"Please provide a valid path to a CSV file in the Samples directory.")
         sys.exit(1)
     
-    print(f"CSV File: {csv_file}")
-    print()
+    print(f"CSV File: {csv_file}\n")
     
     try:
         from visualisation import visualiseGrasps
@@ -254,6 +335,9 @@ Examples:
   # Test planner to find best grasp
   python main.py --mode test_planner --object_x 1.0 --object_y 0.0 --object_z 0.06
   
+  # Test classifier by executing grasps
+  python main.py --mode test_execute --num_grasps 10 --gripper_type TwoFingerGripper --object_type Box
+  
   # Visualise grasp data
   python main.py --mode visualise --csv_file Samples/TwoFingerGripper_Box_20251208_150831.csv
         """
@@ -263,8 +347,8 @@ Examples:
         "--mode",
         type=str,
         required=True,
-        choices=["generate_data", "train_classifier", "test_planner", "visualise"],
-        help="Mode to run: generate_data, train_classifier, test_planner, or visualise"
+        choices=["generate_data", "train_classifier", "test_planner", "test_execute", "visualise"],
+        help="Mode to run: generate_data, train_classifier, test_planner, test_execute, or visualise"
     )
     
     # Common arguments
@@ -314,6 +398,19 @@ Examples:
         help="Type of classifier model to train (default: RandomForest)"
     )
     
+    parser.add_argument(
+        "--cross_validation",
+        action="store_true",
+        help="Run cross-validation with multiple train/test splits (default: False)"
+    )
+    
+    parser.add_argument(
+        "--n_splits",
+        type=int,
+        default=3,
+        help="Number of splits for cross-validation (default: 3)"
+    )
+    
     # Arguments for test_planner mode
     parser.add_argument(
         "--object_x",
@@ -347,7 +444,7 @@ Examples:
         "--seed",
         type=int,
         default=42,
-        help="Random seed for optimisation (default: 42)"
+        help="Random seed for optimisation (test_planner) or test grasp generation (test_execute) (default: 42)"
     )
     
     parser.add_argument(
@@ -371,6 +468,14 @@ Examples:
         help="Bounds for grasp offset as string: \"(-0.1,0.1),(-0.1,0.1),(-0.05,0.1)\" (default: (-0.1,0.1),(-0.1,0.1),(-0.05,0.1))"
     )
     
+    # Arguments for test_execute mode (reuse some from generate_data)
+    parser.add_argument(
+        "--num_grasps",
+        type=int,
+        default=10,
+        help="Number of test grasps to execute (for test_execute mode, default: 10)"
+    )
+    
     # Arguments for visualise mode
     parser.add_argument(
         "--csv_file",
@@ -392,6 +497,8 @@ Examples:
         modeTrainClassifier(args)
     elif args.mode == "test_planner":
         modeTestPlanner(args)
+    elif args.mode == "test_execute":
+        modeTestExecute(args)
     elif args.mode == "visualise":
         modeVisualise(args)
 

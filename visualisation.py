@@ -77,3 +77,6 @@ def visualiseGrasps(csv_file: str):
     ax.axis("equal")
     plt.tight_layout()
     plt.show()
+
+if __name__ == "__main__":
+    visualiseGrasps("Samples/TwoFingerGripper_Duck_20251208_231009.csv")
