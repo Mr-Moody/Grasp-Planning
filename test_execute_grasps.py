@@ -8,7 +8,7 @@ from Grippers.TwoFingerGripper import TwoFingerGripper
 from Grippers.RoboticArm import RoboticArm
 from Object.Objects import Box, Cylinder, Duck
 from Planning.Sphere import FibonacciSphere
-from util import setupEnvironment
+from util import setupEnvironment, pause
 from sampling import extractFeatures, checkGraspSuccess
 from predict_grasp import predictGraspFromGripperObject, _calculateOrientationToTarget
 from train_grasp_model import loadModel, predictGrasp
@@ -118,12 +118,18 @@ def testClassifierPredictions(num_grasps: int = 10, gripper_type: str = "TwoFing
     Returns:
         Dictionary containing test results and metrics
     """
+    # Set random seed at the start to ensure reproducibility
+    np.random.seed(seed)
+    import random
+    random.seed(seed)
+    
     print("=" * 60)
     print("Classifier Test Execution")
     print("=" * 60)
     print(f"Gripper Type: {gripper_type}")
     print(f"Object Type: {object_type}")
-    print(f"Number of Test Grasps: {num_grasps}\n")
+    print(f"Number of Test Grasps: {num_grasps}")
+    print(f"Random Seed: {seed}\n")
 
     # Load trained model
     try:
@@ -141,104 +147,233 @@ def testClassifierPredictions(num_grasps: int = 10, gripper_type: str = "TwoFing
     print(f"Generating {num_grasps} test grasps...")
     test_grasps = generateTestGrasps(num_grasps, gripper_type, object_type, seed)
     print(f"Generated {len(test_grasps)} test grasps")
+    # Debug: Show first few approach vertices to verify seed is working
+    if len(test_grasps) > 0:
+        print(f"First approach vertex (seed {seed}): {test_grasps[0]['approach_vertex']}")
     print()
     
     # Initialise gripper and object
     if gripper_type == "TwoFingerGripper":
         gripper = TwoFingerGripper()
-    elif gripper_type == "RoboticArm":
-        gripper = RoboticArm()
-    else:
-        print(f"ERROR: Unknown gripper type: {gripper_type}")
-        return None
-    
-    if object_type == "Box":
-        object = Box(position=np.array([0, 0, 0.06]))
-    elif object_type == "Cylinder":
-        object = Cylinder(position=np.array([0, 0, 0.06]))
-    elif object_type == "Duck":
-        object = Duck(position=np.array([0, 0, 0.06]))
-    else:
-        print(f"ERROR: Unknown object type: {object_type}")
-        return None
-    
-    gripper.load()
-    object.load()
-    
-    predictions = []
-    actual_results = []
-    prediction_probs = []
-    test_results = []
-    
-    print("Executing test grasps...")
-    for i, test_grasp in enumerate(test_grasps):
-        print(f"  Test grasp {i+1}/{len(test_grasps)}...", end=" ")
-        
-        approach_vertex = test_grasp["approach_vertex"]
-        grasp_offset = test_grasp["grasp_offset"]
-        object_pos = object.getPosition()
-        
-        orientation_quat = _calculateOrientationToTarget(approach_vertex, object_pos)
-        rotation = R.from_quat(orientation_quat)
-        euler_angles = rotation.as_euler('xyz')
-        
-        # Calculate approach direction
-        approach_direction = approach_vertex - object_pos
-        approach_distance = np.linalg.norm(approach_direction)
-        if approach_distance > 0:
-            approach_direction = approach_direction / approach_distance
-        
-        # Make prediction using model
-        prediction, probability = predictGrasp(
-            model, scaler,
-            orientation_roll=euler_angles[0],
-            orientation_pitch=euler_angles[1],
-            orientation_yaw=euler_angles[2],
-            offset_x=grasp_offset[0],
-            offset_y=grasp_offset[1],
-            offset_z=grasp_offset[2],
-            approach_dir_x=approach_direction[0],
-            approach_dir_y=approach_direction[1],
-            approach_dir_z=approach_direction[2],
-            approach_distance=approach_distance
-        )
-        
-        # Execute grasp and get actual result
-        success, features = executeTestGrasp(gripper, object, approach_vertex, grasp_offset, object_type, gui)
-        
-        predictions.append(prediction)
-        actual_results.append(1 if success else 0)
-        prediction_probs.append(probability[1] if probability is not None else 0.0)
-        
-        test_results.append({
-            "grasp_id": i + 1,
-            "prediction": prediction,
-            "actual": 1 if success else 0,
-            "success_probability": probability[1] if probability is not None else 0.0,
-            "correct": prediction == (1 if success else 0),
-            "features": features
-        })
-        
-        gripper.unload()
-        object.unload()
-        
         gripper.load()
+        
         if object_type == "Box":
             object = Box(position=np.array([0, 0, 0.06]))
         elif object_type == "Cylinder":
             object = Cylinder(position=np.array([0, 0, 0.06]))
         elif object_type == "Duck":
             object = Duck(position=np.array([0, 0, 0.06]))
+        else:
+            print(f"ERROR: Unknown object type: {object_type}")
+            return None
         object.load()
         
+        predictions = []
+        actual_results = []
+        prediction_probs = []
+        test_results = []
+        
+        print("Executing test grasps...")
+        for i, test_grasp in enumerate(test_grasps):
+            print(f"  Test grasp {i+1}/{len(test_grasps)}...", end=" ")
+            
+            approach_vertex = test_grasp["approach_vertex"]
+            grasp_offset = test_grasp["grasp_offset"]
+            object_pos = object.getPosition()
+            
+            orientation_quat = _calculateOrientationToTarget(approach_vertex, object_pos)
+            rotation = R.from_quat(orientation_quat)
+            euler_angles = rotation.as_euler('xyz')
+            
+            # Calculate approach direction
+            approach_direction = approach_vertex - object_pos
+            approach_distance = np.linalg.norm(approach_direction)
+            if approach_distance > 0:
+                approach_direction = approach_direction / approach_distance
+            
+            # Make prediction using model
+            prediction, probability = predictGrasp(
+                model, scaler,
+                orientation_roll=euler_angles[0],
+                orientation_pitch=euler_angles[1],
+                orientation_yaw=euler_angles[2],
+                offset_x=grasp_offset[0],
+                offset_y=grasp_offset[1],
+                offset_z=grasp_offset[2],
+                approach_dir_x=approach_direction[0],
+                approach_dir_y=approach_direction[1],
+                approach_dir_z=approach_direction[2],
+                approach_distance=approach_distance
+            )
+            
+            # Execute grasp and get actual result
+            success, features = executeTestGrasp(gripper, object, approach_vertex, grasp_offset, object_type, gui)
+            
+            predictions.append(prediction)
+            actual_results.append(1 if success else 0)
+            prediction_probs.append(probability[1] if probability is not None else 0.0)
+            
+            test_results.append({
+                "grasp_id": i + 1,
+                "prediction": prediction,
+                "actual": 1 if success else 0,
+                "success_probability": probability[1] if probability is not None else 0.0,
+                "correct": prediction == (1 if success else 0),
+                "features": features
+            })
+            
+            gripper.unload()
+            object.unload()
+            
+            gripper.load()
+            if object_type == "Box":
+                object = Box(position=np.array([0, 0, 0.06]))
+            elif object_type == "Cylinder":
+                object = Cylinder(position=np.array([0, 0, 0.06]))
+            elif object_type == "Duck":
+                object = Duck(position=np.array([0, 0, 0.06]))
+            object.load()
+            
+            # Let object settle
+            for _ in range(50):
+                p.stepSimulation()
+            
+            print(f"Predicted: {'Success' if prediction == 1 else 'Failure'}\nActual: {'Success' if success else 'Failure'}")
+        
+        gripper.unload()
+        object.unload()
+        
+    elif gripper_type == "RoboticArm":
+        # RoboticArm uses a different interface
+        arm = RoboticArm()
+        robot_id, gripper_joints = arm.load_panda()
+        gripper_joints = arm.get_gripper_indices(robot_id)
+        arm.reset_arm_pose(robot_id)
+        ee_link_idx = 11
+        
+        object_start_pos = np.array([0, 0, 0.04])
+        if object_type == "Box":
+            object = Box(position=object_start_pos)
+            object_orientation = np.array([0, 0, 0, 1])
+        elif object_type == "Cylinder":
+            object = Cylinder(position=object_start_pos)
+            object_orientation = np.array([0, 0, 0, 1])
+        elif object_type == "Duck":
+            object = Duck(position=object_start_pos)
+            object_orientation = np.array(p.getQuaternionFromEuler([np.pi/2, 0, 0]))
+        else:
+            print(f"ERROR: Unknown object type: {object_type}")
+            return None
+        
+        object.load()
         # Let object settle
         for _ in range(50):
             p.stepSimulation()
         
-        print(f"Predicted: {'Success' if prediction == 1 else 'Failure'}\nActual: {'Success' if success else 'Failure'}")
+        # For Duck, set orientation after settling
+        if object_type == "Duck":
+            current_position, _ = object.getPositionAndOrientation()
+            object.setPosition(new_position=current_position, new_orientation=object_orientation)
+        
+        object_start_pos, _ = object.getPositionAndOrientation()
+        object_start_pos = np.array(object_start_pos)
+        
+        predictions = []
+        actual_results = []
+        prediction_probs = []
+        test_results = []
+        
+        print("Executing test grasps...")
+        for i, test_grasp in enumerate(test_grasps):
+            print(f"  Test grasp {i+1}/{len(test_grasps)}...", end=" ")
+            
+            approach_vertex = test_grasp["approach_vertex"]
+            grasp_offset = test_grasp["grasp_offset"]
+            current_object_pos, _ = object.getPositionAndOrientation()
+            current_object_pos = np.array(current_object_pos)
+            
+            # Calculate approach pose using RoboticArm's method
+            approach_pos, approach_orn = arm.grasp_pose_from_point(approach_vertex, current_object_pos)
+            
+            # Convert orientation to euler for prediction
+            roll, pitch, yaw = arm.quaternion_to_euler(approach_orn)
+            
+            # Calculate approach direction
+            approach_direction = approach_vertex - np.array([0, 0, 0])  # relative to object center
+            approach_distance = np.linalg.norm(approach_direction)
+            if approach_distance > 0:
+                approach_direction = approach_direction / approach_distance
+            
+            # Make prediction using model
+            prediction, probability = predictGrasp(
+                model, scaler,
+                orientation_roll=roll,
+                orientation_pitch=pitch,
+                orientation_yaw=yaw,
+                offset_x=grasp_offset[0],
+                offset_y=grasp_offset[1],
+                offset_z=grasp_offset[2],
+                approach_dir_x=approach_direction[0],
+                approach_dir_y=approach_direction[1],
+                approach_dir_z=approach_direction[2],
+                approach_distance=approach_distance
+            )
+            
+            # Calculate start position (sphere point relative to object)
+            start_pos = current_object_pos + approach_vertex
+            start_orn = approach_orn
+            
+            # Execute grasp using RoboticArm's method
+            success = arm.do_grasp_and_evaluate(
+                robot_id, gripper_joints, ee_link_idx,
+                start_pos, start_orn, approach_pos, approach_orn, object, grasp_offset=grasp_offset
+            )
+            
+            # Extract features (similar to RoboticArm's sampling method)
+            link_state = p.getLinkState(robot_id, ee_link_idx)
+            ee_quat = link_state[1]
+            roll, pitch, yaw = arm.quaternion_to_euler(ee_quat)
+            
+            features = {
+                "orientation_roll": float(roll),
+                "orientation_pitch": float(pitch),
+                "orientation_yaw": float(yaw),
+                "offset_x": float(grasp_offset[0]),
+                "offset_y": float(grasp_offset[1]),
+                "offset_z": float(grasp_offset[2]),
+                "approach_dir_x": float(approach_direction[0]),
+                "approach_dir_y": float(approach_direction[1]),
+                "approach_dir_z": float(approach_direction[2]),
+                "approach_distance": float(approach_distance)
+            }
+            
+            predictions.append(prediction)
+            actual_results.append(1 if success else 0)
+            prediction_probs.append(probability[1] if probability is not None else 0.0)
+            
+            test_results.append({
+                "grasp_id": i + 1,
+                "prediction": prediction,
+                "actual": 1 if success else 0,
+                "success_probability": probability[1] if probability is not None else 0.0,
+                "correct": prediction == (1 if success else 0),
+                "features": features
+            })
+            
+            # Reset object and arm for next grasp
+            p.resetBasePositionAndOrientation(object.id, object_start_pos, object_orientation)
+            p.resetBaseVelocity(object.id, [0, 0, 0], [0, 0, 0])
+            arm.reset_arm_pose(robot_id)
+            pause(0.1)
+            
+            print(f"Predicted: {'Success' if prediction == 1 else 'Failure'}\nActual: {'Success' if success else 'Failure'}")
+        
+        object.unload()
+        
+    else:
+        print(f"ERROR: Unknown gripper type: {gripper_type}")
+        return None
     
-    gripper.unload()
-    object.unload()
     p.disconnect()
     
     # Calculate metrics
@@ -280,7 +415,22 @@ def testClassifierPredictions(num_grasps: int = 10, gripper_type: str = "TwoFing
     
     # Classification report
     print("Classification Report:")
-    print(classification_report(actual_array, predictions_array, target_names=["Failure", "Success"],zero_division=0.0))
+    
+    # Check which classes are present
+    unique_classes_actual = np.unique(actual_array)
+    unique_classes_pred = np.unique(predictions_array)
+    all_classes = np.unique(np.concatenate([unique_classes_actual, unique_classes_pred]))
+    
+    if len(all_classes) == 1:
+        print(f"Warning: Only one class ({'Success' if all_classes[0] == 1 else 'Failure'}) present in test results.")
+        print("Cannot generate classification report with only one class.")
+        print(f"All test samples are: {'Success' if all_classes[0] == 1 else 'Failure'}")
+    else:
+        # Use labels parameter to ensure both classes are included even if one is missing
+        print(classification_report(actual_array, predictions_array, 
+                                   labels=[0, 1],
+                                   target_names=["Failure", "Success"],
+                                   zero_division=0.0))
     
     # Detailed results
     print("\nDetailed Results:")

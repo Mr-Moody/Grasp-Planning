@@ -72,13 +72,13 @@ Trains a classifier on the generated grasp data.
 python main.py --mode train_classifier
 
 # Train on a specific data file
-python main.py --mode train_classifier --data_file Samples/TwoFingerGripper_Box_20251208_150831.csv
+python main.py --mode train_classifier --data_file TwoFingerGripper_Box_20251208_150831.csv
 
 # Train using SVM model
 python main.py --mode train_classifier --model_type SVM
 
 # Train using LogisticRegression model on a specific data file
-python main.py --mode train_classifier --data_file Samples/TwoFingerGripper_Box_20251208_150831.csv --model_type LogisticRegression
+python main.py --mode train_classifier --data_file TwoFingerGripper_Box_20251208_150831.csv --model_type LogisticRegression
 
 # Train with cross-validation (3 splits by default)
 python main.py --mode train_classifier --cross_validation
@@ -143,46 +143,17 @@ python main.py --mode test_execute --num_grasps 10 --gui
 
 #### 5. Visualise (`visualise`)
 
-**Arguments:**
-- `--object_x` (float, default: 1.0): X position of the object
-- `--object_y` (float, default: 0.0): Y position of the object
-- `--object_z` (float, default: 0.06): Z position of the object
-- `--maxiter` (int, default: 100): Maximum number of iterations for optimisation
-- `--seed` (int, default: 42): Random seed for optimisation reproducibility
-- `--tol` (float, default: 0.01): Convergence tolerance for optimisation
-- `--approach_bounds` (str, default: "(-1.0,1.0),(-1.0,1.0),(0.3,1.0)"): Bounds for approach vertex
-  - Format: `"(min_x,max_x),(min_y,max_y),(min_z,max_z)"`
-- `--offset_bounds` (str, default: "(-0.1,0.1),(-0.1,0.1),(-0.05,0.1)"): Bounds for grasp offset
-  - Format: `"(min_x,max_x),(min_y,max_y),(min_z,max_z)"`
-
-**Examples:**
-```bash
-# Find best grasp with default object position
-python main.py --mode test_planner
-
-# Find best grasp for object at specific position
-python main.py --mode test_planner --object_x 1.0 --object_y 0.0 --object_z 0.06
-
-# Test with custom optimization parameters
-python main.py --mode test_planner --object_x 0.5 --object_y 0.5 --object_z 0.1 --maxiter 200 --tol 0.005
-
-```
-
-#### 4. Visualise (`visualise`)
-
 Visualises grasp success/failure data from a CSV file in 3D space.
 
 **Arguments:**
 - `--csv_file` (str, required): Path to CSV file to visualise
-  - Can be a relative path (will check in `Samples/` directory) or absolute path
+  - Will check in `Samples/` directory
 
 **Examples:**
 ```bash
 # Visualise a specific data file
-python main.py --mode visualise --csv_file Samples/TwoFingerGripper_Box_20251208_150831.csv
-
-# Visualise using just filename (searches in Samples directory)
 python main.py --mode visualise --csv_file TwoFingerGripper_Box_20251208_150831.csv
+
 ```
 
 ## Examples
@@ -203,7 +174,7 @@ python main.py --mode test_planner --object_x 1.0 --object_y 0.0 --object_z 0.06
 python main.py --mode test_execute --num_grasps 10 --gripper_type TwoFingerGripper --object_type Box
 
 # Step 5: Visualise the generated data
-python main.py --mode visualise --csv_file Samples/TwoFingerGripper_Box_20251208_150831.csv
+python main.py --mode visualise --csv_file TwoFingerGripper_Box_20251208_150831.csv
 ```
 
 ## Output Files

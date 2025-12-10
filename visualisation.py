@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from mpl_toolkits.mplot3d import Axes3D
 from typing import cast
 import os
+import seaborn as sns
 
 def visualiseGrasps(csv_file: str):
     df = pd.read_csv(csv_file)
@@ -77,6 +78,30 @@ def visualiseGrasps(csv_file: str):
     ax.axis("equal")
     plt.tight_layout()
     plt.show()
+    
+def visualiseConfusionMatrix(confusion_matrix:np.ndarray, save_dir:str="Plots"):
+    """
+    Visualise and save the confusion matrix.
+    """
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(confusion_matrix, annot=True, fmt="d", cmap=sns.cubehelix_palette(as_cmap=True), 
+                xticklabels=["Failure", "Success"], 
+                yticklabels=["Failure", "Success"])
+    plt.xlabel("Predicted Label")
+    plt.ylabel("Actual Label")
+    plt.title("Confusion Matrix") #
+    
+    # Ensure directory exists
+    os.makedirs(save_dir, exist_ok=True)
+    
+    from datetime import datetime
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    save_path = os.path.join(save_dir, f"confusion_matrix_{timestamp}.png")
+    
+    plt.savefig(save_path)
+    print(f"Confusion matrix saved to {save_path}")
+    plt.close()
 
 if __name__ == "__main__":
-    visualiseGrasps("Samples/TwoFingerGripper_Duck_20251208_231009.csv")
+    #visualiseGrasps("Samples/TwoFingerGripper_Duck_20251208_231009.csv")
+    visualiseConfusionMatrix(np.array([[1, 0], [2, 7]]), "Plots")

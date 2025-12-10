@@ -12,6 +12,8 @@ from scipy.stats import randint, uniform
 import joblib
 import os
 
+from visualisation import visualiseConfusionMatrix
+
 def loadGraspData(data_file:str="Samples/grasp_data.csv"):
     """
     Load grasp data from CSV file.
@@ -277,15 +279,32 @@ def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n
         print(f"\n{RED}WARNING: Large gap between train ({train_accuracy:.4f}) and validation ({val_accuracy:.4f}) accuracy!{RESET}")
         print(f"   Gap: {train_val_gap:.4f} - Model is overfitting significantly.{RESET}")
         print(f"\n   Current best parameters:")
-        print(f"   - max_depth: {clf.max_depth}")
-        print(f"   - min_samples_split: {clf.min_samples_split}")
-        print(f"   - min_samples_leaf: {clf.min_samples_leaf}")
-        print(f"   - max_features: {clf.max_features}")
-        print(f"   - n_estimators: {clf.n_estimators}")
+        
+        if hasattr(clf, "max_depth"):
+            print(f"   - max_depth: {clf.max_depth}")
+            print(f"   - min_samples_split: {clf.min_samples_split}")
+            print(f"   - min_samples_leaf: {clf.min_samples_leaf}")
+            print(f"   - max_features: {clf.max_features}")
+            print(f"   - n_estimators: {clf.n_estimators}")
+        else:
+            # Print relevant parameters for other models (e.g. SVM, LogisticRegression)
+            params = clf.get_params()
+            for key, value in params.items():
+                # Only print interesting params to avoid clutter
+                if key in ["C", "gamma", "kernel", "solver", "penalty", "degree"]:
+                    print(f"   - {key}: {value}")
 
     elif train_val_gap > 0.05:
         print(f"\n{YELLOW}Moderate overfitting detected (gap: {train_val_gap:.4f}){RESET}\n")
-        print(f"   Current parameters: max_depth={clf.max_depth}, min_samples_split={clf.min_samples_split}, min_samples_leaf={clf.min_samples_leaf}")
+        
+        if hasattr(clf, "max_depth"):
+            print(f"   Current parameters: max_depth={clf.max_depth}, min_samples_split={clf.min_samples_split}, min_samples_leaf={clf.min_samples_leaf}")
+        else:
+            print("   Model parameters (subset):")
+            params = clf.get_params()
+            for key in ["C", "gamma", "kernel", "solver", "penalty"]:
+                if key in params:
+                    print(f"     {key}: {params[key]}")
 
     else:
         print(f"\n{GREEN}Good generalisation (train-val gap: {train_val_gap:.4f}){RESET}")
@@ -318,6 +337,8 @@ def trainModel(features, labels, test_size=0.2, val_size=0.2, random_state=42, n
     print("\nConfusion Matrix (Test Set):")
     cm = confusion_matrix(y_test, y_test_pred, labels=[0, 1])
     print(f"Confusion Matrix:\n{cm}")
+    
+    #visualiseConfusionMatrix(cm)
     
     # # Feature importance
     # print("\nFeature Importance:")
